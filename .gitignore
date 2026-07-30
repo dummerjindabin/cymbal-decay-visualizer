@@ -1,0 +1,16 @@
+.DS_Store
+._*
+*.wav
+*.mp3
+*.aiff
+*.flac
+*.m4a
+output/
+exports/
+tmp/
+private/
+drafts/
+.env
+.env.*
+*.pem
+*.key

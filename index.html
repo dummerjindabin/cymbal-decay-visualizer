@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<!--
+  Cymbal Decay Visualizer
+  Copyright © 2026 Jinjue. All rights reserved.
+  Personal, educational, research, and non-commercial use only unless
+  commercial permission is granted in writing.
+-->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镲片音色衰减分析 · Cymbal Decay Visualizer</title>
+<style>
+  :root {
+    --bg: #0b0c0e;
+    --bg-deep: #070809;
+    --surface: #111315;
+    --surface-raised: #171a1d;
+    --surface-hover: #1d2125;
+    --border: #30353a;
+    --border-soft: #24292e;
+    --border-strong: #4a5158;
+    --text: #e7e6e1;
+    --text-soft: #b7b8b3;
+    --text-dim: #818580;
+    --accent: #d9a441;
+    --accent-bright: #f0bd58;
+    --accent-soft: rgba(217,164,65,.13);
+    --danger: #e47870;
+    --focus: rgba(217,164,65,.45);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { background:var(--bg-deep); }
+  body {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.025), transparent 180px),
+      var(--bg-deep);
+    color:var(--text);
+    font-family:-apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    letter-spacing:.005em;
+  }
+  #app { width:100%; max-width:1240px; padding:42px 28px 72px; display:flex; flex-direction:column; gap:22px; }
+  h1 { color:var(--text); text-align:left; font-size:25px; line-height:1.15; font-weight:650; letter-spacing:-.025em; }
+  h1::before { content:'SOUNDLAB / ANALYSIS'; display:block; color:var(--accent); font:650 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.16em; margin-bottom:12px; }
+  h1 span { display:block; font-weight:400; font-size:13px; color:var(--text-dim); margin-top:8px; letter-spacing:.01em; }
+
+  #drop-zone {
+    min-height:188px;
+    border:1px dashed #555b5b;
+    border-radius:10px;
+    padding:38px 24px 32px;
+    text-align:center;
+    color:var(--text-dim);
+    transition:background .2s, border-color .2s, box-shadow .2s, transform .2s;
+    cursor:pointer;
+    background:linear-gradient(135deg, rgba(255,255,255,.035), rgba(255,255,255,.012));
+  }
+  #drop-zone:hover { border-color:#777c76; background:rgba(255,255,255,.045); }
+  #drop-zone.drag-over { border-color:var(--accent); background:var(--accent-soft); color:#f2d99c; box-shadow:0 0 0 3px rgba(217,164,65,.08), 0 18px 45px rgba(0,0,0,.2); transform:translateY(-1px); }
+  .cymbal-icon { width:66px; height:52px; display:block; margin:0 auto 13px; color:var(--accent-bright); filter:none; overflow:visible; }
+  .drop-title { color:var(--text); font-size:15px; font-weight:600; }
+  #btn-pick {
+    display:inline-block; margin-top:16px; padding:9px 18px; min-height:40px;
+    border:1px solid rgba(217,164,65,.55); border-radius:7px;
+    background:var(--accent-soft); color:#f1ca78; font-size:13px; cursor:pointer; transition:background .2s, border-color .2s;
+  }
+  #btn-pick:hover { background:rgba(217,164,65,.22); border-color:var(--accent-bright); }
+
+  #canvas-wrap { border-radius:8px; overflow:visible; background:var(--surface); border:1px solid var(--border); box-shadow:0 14px 38px rgba(0,0,0,.28); display:none; position:relative; }
+  #canvas-wrap.visible { display:block; }
+  #canvas-wrap canvas { border-radius:7px; display:block; width:100%; height:auto; }
+  #analysis-status { display:none; position:absolute; inset:0; align-items:center; justify-content:center; flex-direction:column; gap:12px; background:rgba(8,9,10,.78); backdrop-filter:blur(3px); z-index:20; pointer-events:none; }
+  #analysis-status.visible { display:flex; }
+  .analysis-spinner { width:30px; height:30px; border:2px solid rgba(217,164,65,.22); border-top-color:var(--accent-bright); border-radius:50%; animation:analysis-spin .8s linear infinite; }
+  .analysis-status-label { color:#f1ca78; font-size:15px; font-weight:650; letter-spacing:.06em; }
+  .analysis-status-sub { color:var(--text-dim); font:11px ui-monospace,SFMono-Regular,Menlo,monospace; }
+  @keyframes analysis-spin { to { transform:rotate(360deg); } }
+
+  #info-bar { display:none; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding:0 2px; font-size:13px; color:var(--text-dim); }
+  #info-bar.visible { display:flex; }
+  #file-name { color:var(--text); font-weight:650; font-size:18px; letter-spacing:-.01em; overflow-wrap:anywhere; }
+  #file-meta { color:#c7c9c3; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:rgba(255,255,255,.025); }
+
+  #controls { display:none; gap:8px; flex-wrap:wrap; justify-content:flex-start; padding:2px 0; }
+  #controls.visible { display:flex; }
+  button {
+    min-height:40px; padding:9px 15px; border:1px solid var(--border); border-radius:7px;
+    background:#171a1d; color:var(--text-soft); font-size:12px; cursor:pointer; transition:background .18s, border-color .18s, color .18s; font-family:inherit;
+  }
+  button:hover { background:var(--surface-hover); border-color:var(--border-strong); color:var(--text); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+  button.primary { background:var(--accent-soft); border-color:rgba(217,164,65,.6); color:#f1ca78; }
+  button.primary:hover { background:rgba(217,164,65,.23); border-color:var(--accent-bright); color:#ffe2a0; }
+  button.mode-active { background:rgba(217,164,65,.20); border-color:var(--accent-bright); color:#ffe2a0; }
+  button:disabled { opacity:.35; cursor:not-allowed; }
+
+  #legend { display:none; flex-wrap:wrap; gap:9px 22px; justify-content:flex-start; padding:11px 2px 3px; border-top:1px solid var(--border-soft); }
+  #legend.visible { display:flex; }
+  .legend-item { display:flex; align-items:center; gap:7px; font-size:11px; cursor:pointer; opacity:.72; transition:opacity .2s, color .2s; }
+  .legend-item:hover,.legend-item.active { opacity:1; color:var(--text); }
+  .legend-item.muted { opacity:.2; }
+  .legend-swatch { width:22px; height:4px; border-radius:1px; }
+
+  #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%); background:#1b1e20; border:1px solid var(--border-strong); color:var(--text); padding:10px 16px; border-radius:7px; font-size:12px; box-shadow:0 10px 30px rgba(0,0,0,.3); opacity:0; pointer-events:none; transition:opacity .25s; z-index:100; }
+  #toast.show { opacity:1; }
+  #error-msg { display:none; text-align:left; padding:13px 15px; color:#f1a09a; font-size:12px; border:1px solid rgba(228,120,112,.35); border-radius:7px; background:rgba(228,120,112,.08); }
+  #error-msg.visible { display:block; }
+  input[type=file] { display:none; }
+
+  #compare-panel { display:flex; flex-direction:column; gap:14px; padding:16px; border:1px solid var(--border); border-radius:9px; background:var(--surface); box-shadow:0 14px 40px rgba(0,0,0,.2); }
+  #compare-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-start; padding:1px; }
+  .compare-intro { color:var(--text-dim); font-size:11px; letter-spacing:.01em; margin-right:4px; }
+  .compare-select { appearance:auto; background:#0d0f11; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 28px 8px 10px; min-height:36px; font-size:11px; font-family:inherit; }
+  .compare-count { color:var(--text-dim); font-size:11px; font-variant-numeric:tabular-nums; padding:0 3px; }
+  .compare-align { color:var(--text-dim); font-size:11px; cursor:pointer; user-select:none; display:flex; align-items:center; gap:5px; padding:7px 3px; }
+  .compare-align input { accent-color:var(--accent); }
+  .compare-btn { min-height:36px; padding:8px 12px; font-size:11px; }
+  .compare-view-controls { display:flex; align-items:center; gap:4px; padding:4px 6px; border:1px solid var(--border); border-radius:6px; background:#0d0f11; }
+  .compare-view-label { color:var(--text-dim); font-size:10px; font-weight:700; letter-spacing:.08em; margin:0 2px 0 4px; }
+  .compare-view-value { min-width:29px; color:#e8c97d; font:600 10px ui-monospace,SFMono-Regular,Menlo,monospace; text-align:center; }
+  .compare-icon-btn { width:27px; height:27px; min-height:27px; padding:0; border-radius:5px; font-size:15px; line-height:1; display:grid; place-items:center; }
+  .compare-reset-btn { min-height:27px; padding:5px 8px; border-radius:5px; font-size:10px; }
+  .compare-chart-shell { width:100%; overflow:hidden; border:1px solid var(--border-soft); border-radius:7px; background:var(--surface); }
+  .compare-chart-shell canvas { display:block; width:100%; height:auto; }
+  #compare-panel button.primary { box-shadow:none; }
+
+  @media(max-width:700px) {
+    #app { padding:28px 14px 44px; gap:16px; }
+    h1 { font-size:21px; }
+    #drop-zone { min-height:170px; padding:30px 18px 26px; }
+    #compare-panel { padding:11px; }
+    #compare-toolbar { justify-content:flex-start; }
+    .compare-intro { width:100%; margin:0 0 3px; }
+    #file-name { font-size:16px; }
+    #controls { justify-content:flex-start; }
+  }
+  /* ═══════════════ 浅色专业工作台主题 ═══════════════ */
+  :root {
+    --bg:#e8e3da;
+    --bg-deep:#e2ddd4;
+    --surface:#f3f0ea;
+    --surface-raised:#f7f4ee;
+    --surface-hover:#ebe8e1;
+    --border:#d1cbc0;
+    --border-soft:#dfdad1;
+    --border-strong:#aaa397;
+    --text:#303438;
+    --text-soft:#5d605f;
+    --text-dim:#777873;
+    --accent:#a66d17;
+    --accent-bright:#8e590b;
+    --accent-soft:rgba(166,109,23,.10);
+    --danger:#a84b43;
+    --focus:rgba(166,109,23,.40);
+  }
+  body {
+    background:
+      linear-gradient(180deg,rgba(255,255,255,.18),transparent 220px),
+      #e8e3da;
+    color:var(--text);
+  }
+  #drop-zone { background:#f3f0ea; }
+  #drop-zone:hover { background:#f7f4ee; }
+  #drop-zone.drag-over { background:#f4ecda; }
+  #canvas-wrap, #compare-panel { background:#f3f0ea; border-color:#cec8be; }
+  #file-meta { background:#ebe8e1; border-color:#d1cbc0; color:#5d605f; }
+  #controls button, button { background:#f3f0ea; border-color:#d1cbc0; color:#5d605f; }
+  button:hover { background:#ebe8e1; border-color:#aaa397; color:#303438; }
+  .compare-select, .compare-view-controls { background:#ebe8e1; color:#303438; border-color:#d1cbc0; }
+  .compare-chart-shell { border-color:#cec8be; background:#f3f0ea; }
+  #toast { background:#f3f0ea; border-color:#c9c2b7; color:#303438; }
+  #canvas-wrap { background:#2a3032; border-color:#3b4243; }
+  #canvas-wrap canvas { background:#2a3032; }
+  #app { max-width:1320px; padding-top:36px; }
+  h1 { color:#17212a; }
+  h1::before { color:#9a5d08; }
+  h1 span { color:#697783; }
+  #drop-zone {
+    border-color:#b9c3ca;
+    background:#ffffff;
+    box-shadow:0 8px 24px rgba(28,37,45,.045);
+  }
+  #drop-zone:hover { border-color:#8f9ca6; background:#fbfcfc; }
+  #drop-zone.drag-over {
+    border-color:#b67819;
+    background:#fff8eb;
+    color:#7b5110;
+    box-shadow:0 0 0 3px rgba(182,120,25,.10),0 14px 32px rgba(28,37,45,.08);
+  }
+  .drop-title { color:#26343e; }
+  .cymbal-icon { color:#a96d13; }
+  #btn-pick, button.primary {
+    border-color:rgba(154,93,8,.48);
+    background:rgba(182,120,25,.09);
+    color:#80500a;
+  }
+  #btn-pick:hover, button.primary:hover { background:rgba(182,120,25,.16); border-color:#9a5d08; color:#684006; }
+  #canvas-wrap, #compare-panel {
+    background:#ffffff;
+    border-color:#d4dce1;
+    box-shadow:0 12px 30px rgba(28,37,45,.08);
+  }
+  #info-bar { color:#71808b; }
+  #file-name { display:inline-flex; align-items:center; gap:10px; }
+  #btn-delete-current {
+    flex:0 0 auto;
+    width:1em;
+    height:1em;
+    min-height:0;
+    padding:0;
+    border:0;
+    background:transparent;
+    color:rgba(184,71,63,.38);
+    font-size:1em;
+    line-height:1;
+    font-weight:700;
+    cursor:pointer;
+    opacity:.72;
+    filter:blur(.35px);
+    transition:color .22s ease, opacity .22s ease, filter .22s ease, transform .22s ease;
+  }
+  #btn-delete-current[hidden] { display:none; }
+  #btn-delete-current:hover,
+  #btn-delete-current:focus-visible {
+    color:#d33f36;
+    opacity:1;
+    filter:none;
+    transform:scale(1.08);
+  }
+  #btn-delete-current:focus-visible { outline:2px solid rgba(184,71,63,.30); outline-offset:4px; border-radius:3px; }
+  #btn-delete-current::after {
+    content:'删除该音频分析';
+    position:absolute;
+    margin-left:12px;
+    margin-top:-2px;
+    white-space:nowrap;
+    pointer-events:none;
+    color:#9e3d36;
+    background:#f3f0ea;
+    border:1px solid rgba(184,71,63,.24);
+    border-radius:5px;
+    padding:5px 8px;
+    font-size:11px;
+    font-weight:500;
+    opacity:0;
+    transform:translateX(-4px);
+    transition:opacity .22s ease, transform .22s ease;
+  }
+  #btn-delete-current:hover::after,
+  #btn-delete-current:focus-visible::after { opacity:1; transform:translateX(0); transition-delay:1s; }
+  #file-meta { color:#5d6b75; border-color:#d8dee3; background:#f7f9fa; }
+  #controls button, button { background:#ffffff; border-color:#d2dae0; color:#53616d; }
+  button:hover { background:#f4f7f8; border-color:#aeb8c1; color:#1c252d; }
+  button.mode-active { background:rgba(182,120,25,.13); border-color:#b67819; color:#704708; }
+  #legend { border-top-color:#e2e7ea; }
+  .legend-item { color:#687783; }
+  .legend-item:hover,.legend-item.active { color:#25323b; }
+  #compare-toolbar { color:#596873; }
+  .compare-intro,.compare-count,.compare-align { color:#71808b; }
+  .compare-select, .compare-view-controls { background:#f7f9fa; color:#26343e; border-color:#d2dae0; }
+  .compare-view-value { color:#80500a; }
+  .compare-chart-shell { border-color:#d8dee3; background:#ffffff; }
+  #error-msg { color:#9e3d36; border-color:rgba(184,71,63,.30); background:rgba(184,71,63,.06); }
+  #toast { background:#ffffff; border-color:#c9d2d8; color:#26343e; box-shadow:0 10px 28px rgba(28,37,45,.14); }
+  #nav-arrows button {
+    width:42px !important;
+    height:58px !important;
+    min-height:58px !important;
+    padding:0 !important;
+    border:1px solid rgba(28,37,45,.16) !important;
+    border-radius:21px !important;
+    background:rgba(255,255,255,.92) !important;
+    color:#26343e !important;
+    box-shadow:0 3px 12px rgba(28,37,45,.16) !important;
+    font-size:26px !important;
+    line-height:1 !important;
+    opacity:1 !important;
+  }
+  #nav-arrows button:hover {
+    background:#ffffff !important;
+    color:#9a5d08 !important;
+    border-color:rgba(154,93,8,.42) !important;
+    box-shadow:0 4px 14px rgba(28,37,45,.22) !important;
+  }
+  #nav-arrows button:focus-visible {
+    outline:3px solid rgba(182,120,25,.34) !important;
+    outline-offset:3px;
+  }
+  #canvas-wrap {
+    background:#2a3032;
+    border-color:#3b4243;
+  }
+  #canvas-wrap canvas {
+    background:#2a3032;
+  }
+  #nav-prev { left:-58px !important; }
+  #nav-next { right:-58px !important; }
+  @media(max-width:700px) {
+    #app { padding-top:26px; }
+  }</style>
+</head>
+<body>
+<div id="app">
+  <h1>镲片音色衰减分析<span>Cymbal Decay Visualizer · 拖放 / 点击选择音频 → 即时分析</span></h1>
+
+  <div id="drop-zone">
+    <svg class="cymbal-icon" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <path d="M17 40c4-15 25-25 43-25s39 10 43 25c-12 11-30 17-52 17S28 51 17 40Z" fill="currentColor" opacity=".22"/>
+      <ellipse cx="60" cy="38" rx="43" ry="22" fill="none" stroke="currentColor" stroke-width="3"/>
+      <ellipse cx="60" cy="38" rx="29" ry="14" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".68"/>
+      <ellipse cx="60" cy="38" rx="10" ry="5" fill="none" stroke="currentColor" stroke-width="2" class="cymbal-bell"/>
+      <path d="M60 43v18M49 65h22" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+    <div class="drop-title">拖放镲片录音到此处</div>
+    <div id="btn-pick">📁 点击选择文件</div>
+    <input type="file" id="file-input" accept="audio/*,.wav,.mp3,.aiff,.flac,.ogg,.m4a" multiple>
+  </div>
+
+  <div id="error-msg"></div>
+
+  <div id="canvas-wrap"><canvas id="main-canvas"></canvas>
+    <div id="analysis-status" aria-live="polite" aria-busy="true">
+      <div class="analysis-spinner" aria-hidden="true"></div>
+      <div class="analysis-status-label">分析中</div>
+      <div class="analysis-status-sub">请稍候，正在处理音频数据</div>
+    </div>
+    <div id="nav-arrows" style="display:none;position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:10">
+      <button id="nav-prev" style="position:absolute;left:-36px;top:50%;transform:translateY(-50%);pointer-events:auto;background:none;border:none;color:rgba(255,255,255,0.5);font-size:30px;cursor:pointer;padding:8px 4px;line-height:1;transition:color .2s" onmouseover="this.style.color='rgba(255,255,255,0.85)'" onmouseout="this.style.color='rgba(255,255,255,0.5)'">◀</button>
+      <button id="nav-next" style="position:absolute;right:-36px;top:50%;transform:translateY(-50%);pointer-events:auto;background:none;border:none;color:rgba(255,255,255,0.5);font-size:30px;cursor:pointer;padding:8px 4px;line-height:1;transition:color .2s" onmouseover="this.style.color='rgba(255,255,255,0.85)'" onmouseout="this.style.color='rgba(255,255,255,0.5)'">▶</button>
+    </div>
+  </div>
+
+  <div id="info-bar">
+    <span id="file-name"><span id="file-name-text"></span><button id="btn-delete-current" type="button" aria-label="删除当前音频分析" title="">×</button></span>
+    <span id="file-meta"></span>
+  </div>
+
+  <div id="legend"></div>
+
+  <div id="controls">
+    <button class="primary" id="btn-save-png">📊 保存静态图 PNG</button>
+    <button id="btn-record">🎬 录制动态视频</button>
+    <button id="btn-view-mode">👂 听觉贡献</button>
+    <button id="btn-compare-toggle">📈 对比模式</button>
+    <button id="btn-reset">✕ 换文件</button>
+  </div>
+
+  <div id="compare-panel" style="display:none">
+    <div id="compare-toolbar">
+      <span class="compare-intro">拖放含分析数据的 PNG 文件</span>
+      <input type="file" id="cmp-files" multiple accept=".png" style="display:none">
+      <button id="btn-cmp-pick" class="compare-btn">📁 选择 PNG</button>
+      <select id="cmp-band" class="compare-select"></select>
+      <span id="cmp-count" class="compare-count"></span>
+      <label class="compare-align"><input type="checkbox" id="cmp-align" checked>对齐起音</label>
+      <button id="btn-cmp-mode" class="compare-btn">👂 听觉贡献</button>
+      <div class="compare-view-controls" aria-label="对比图视图缩放">
+        <span class="compare-view-label">X</span>
+        <button id="btn-cmp-x-minus" class="compare-icon-btn" title="缩小 X 轴比例" aria-label="缩小 X 轴比例">−</button>
+        <span id="cmp-x-zoom-value" class="compare-view-value">1×</span>
+        <button id="btn-cmp-x-plus" class="compare-icon-btn" title="放大 X 轴比例" aria-label="放大 X 轴比例">+</button>
+        <span class="compare-view-label">Y</span>
+        <button id="btn-cmp-y-minus" class="compare-icon-btn" title="缩小 Y 轴比例" aria-label="缩小 Y 轴比例">−</button>
+        <span id="cmp-y-zoom-value" class="compare-view-value">1×</span>
+        <button id="btn-cmp-y-plus" class="compare-icon-btn" title="放大 Y 轴比例" aria-label="放大 Y 轴比例">+</button>
+        <button id="btn-cmp-view-reset" class="compare-reset-btn" title="重置 X/Y 轴比例">重置视图</button>
+      </div>
+      <button id="btn-cmp-png" class="primary compare-btn">📊 导出对比 PNG</button>
+      <button id="btn-cmp-clear" class="compare-btn">✕ 清除</button>
+    </div>
+    <div id="cmp-wrap" class="compare-chart-shell"><canvas id="cmp-canvas"></canvas></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+// ═══════════════ 常量 ═══════════════
+const BANDS=[
+  {lo:300,hi:500,color:'#C4886C',label:'300–500 Hz'},
+  {lo:500,hi:800,color:'#FF4040',label:'500–800 Hz'},
+  {lo:800,hi:1300,color:'#FF8C00',label:'800–1.3k'},
+  {lo:1300,hi:2000,color:'#FFD700',label:'1.3k–2k'},
+  {lo:2000,hi:3200,color:'#40C048',label:'2k–3.2k'},
+  {lo:3200,hi:5000,color:'#4088FF',label:'3.2k–5k'},
+  {lo:5000,hi:8000,color:'#A040E0',label:'5k–8k'},
+  {lo:8000,hi:12500,color:'#B0B0B0',label:'8k–12.5k'},
+  {lo:12500,hi:18000,color:'#E8E0D0',label:'12.5k–18k'},
+  {lo:18000,hi:22000,color:'#FFC040',label:'18k–22k'},
+];
+const STFT_WIN=4096,STFT_HOP=512,ATTACK_S=0.1,TARGET_DB=-12,SMOOTH=5,MAX_DUR=8;
+const CANVAS_W=1920,CANVAS_H=800;
+const M={top:60,right:190,bottom:70,left:80};
+const BG='#f8fafb',GRID='#dfe5e9',AXIS='#82909a',AXIS_TEXT='#34434d',TEXT_COLOR='#52616b',Y_TOP=0,Y_BOT=-60;
+const MAIN_BG='#242a2c',MAIN_GRID='#3b4243',MAIN_AXIS='#929997',MAIN_AXIS_TEXT='#e1e0d9',MAIN_TEXT_COLOR='#d0d2cd';
+// 第一阶段近似听觉模型：频率敏感度修正 + 响度压缩。
+// 输出是相对听觉贡献，不是经过声压校准的 ISO 532-1/sone 测量。
+const PERCEPTUAL_OFFSET_DB=[-8,-3,0,1,2,1,-1,-4,-9,-16];
+const PERCEPTUAL_SLOPE=.78;
+
+// ═══════════════ FFT ═══════════════
+function fft(re,im){
+  const n=re.length;
+  for(let i=0,j=0;i<n;i++){if(j>i){[re[i],re[j]]=[re[j],re[i]];[im[i],im[j]]=[im[j],im[i]];}let m=n>>1;while(m>=1&&j>=m){j-=m;m>>=1;}j+=m;}
+  for(let sz=2;sz<=n;sz<<=1){const half=sz>>1,ang=-2*Math.PI/sz;for(let i=0;i<n;i+=sz){for(let j=0;j<half;j++){const a=i+j,b=a+half,cos=Math.cos(ang*j),sin=Math.sin(ang*j),tr=re[b]*cos-im[b]*sin,ti=re[b]*sin+im[b]*cos;re[b]=re[a]-tr;im[b]=im[a]-ti;re[a]+=tr;im[a]+=ti;}}}
+}
+
+// ═══════════════ 分析 ═══════════════
+// ═══════════════ 自适应多窗口 STFT ═══════════════
+// 低频用大窗口保频率精度，高频用小窗口保时间精度
+const ADAPTIVE_WINS=[4096,4096,2048,2048,1024,1024,512,512,512,512];
+//                      棕   红   橙    黄    绿     蓝   紫   灰   白   金
+
+function analyze(samples,sr){
+  const bandsRaw=[],timesRaw=[];
+
+  for(let bi=0;bi<BANDS.length;bi++){
+    const ws=ADAPTIVE_WINS[bi];
+    const hop=Math.max(1,Math.floor(ws/8));
+    const freqPerBin=sr/ws;
+
+    // Hann 窗
+    const win=new Float32Array(ws);
+    for(let i=0;i<ws;i++) win[i]=0.5*(1-Math.cos(2*Math.PI*i/(ws-1)));
+
+    const numFrames=Math.floor((samples.length-ws)/hop)+1;
+    if(numFrames<2) throw new Error('音频太短');
+    const curve=new Float32Array(numFrames);
+    const re=new Float32Array(ws),im=new Float32Array(ws);
+
+    for(let fi=0;fi<numFrames;fi++){
+      const off=fi*hop;
+      for(let i=0;i<ws;i++){re[i]=samples[off+i]*win[i];im[i]=0;}
+      fft(re,im);
+      const loBin=Math.floor(BANDS[bi].lo/freqPerBin),
+            hiBin=Math.min(Math.ceil(BANDS[bi].hi/freqPerBin),ws/2);
+      let sumSq=0,cnt=0;
+      for(let b=loBin;b<hiBin;b++){sumSq+=re[b]*re[b]+im[b]*im[b];cnt++;}
+      curve[fi]=cnt>0?20*Math.log10(Math.sqrt(sumSq/cnt)+1e-15):-120;
+    }
+
+    // 平滑（帧数与窗口大小成比例，最小10帧，视觉优先）
+    const smoothR=Math.max(10,Math.round(8*ws/4096));
+    const smoothed=new Float32Array(numFrames);
+    for(let i=0;i<numFrames;i++){
+      let sum=0,c=0;
+      for(let j=Math.max(0,i-smoothR);j<=Math.min(numFrames-1,i+smoothR);j++){sum+=curve[j];c++;}
+      smoothed[i]=sum/c;
+    }
+
+    // 时间轴：窗口中心
+    const times=new Float32Array(numFrames);
+    for(let i=0;i<numFrames;i++) times[i]=(i*hop+ws/2)/sr;
+
+    bandsRaw.push(smoothed);
+    timesRaw.push(times);
+  }
+
+  // ── 插值到统一时间网格 ──
+  const outHop=STFT_HOP; // 512 samples
+  const outNumFrames=Math.floor((samples.length-Math.min(...ADAPTIVE_WINS))/outHop)+1;
+  const t=new Float32Array(outNumFrames);
+  for(let i=0;i<outNumFrames;i++) t[i]=(i*outHop)/sr;
+
+  const curves=[];
+  for(let bi=0;bi<BANDS.length;bi++){
+    const src=bandsRaw[bi],srcT=timesRaw[bi];
+    const out=new Float32Array(outNumFrames);
+    let si=0;
+    for(let i=0;i<outNumFrames;i++){
+      const tt=t[i];
+      while(si<srcT.length-1&&srcT[si+1]<=tt) si++;
+      if(si>=srcT.length-1){out[i]=src[srcT.length-1];continue;}
+      if(tt<=srcT[0]){out[i]=src[0];continue;}
+      const frac=(tt-srcT[si])/(srcT[si+1]-srcT[si]);
+      out[i]=src[si]+frac*(src[si+1]-src[si]);
+    }
+    curves.push(out);
+  }
+
+  // 相对化
+  let globalMax=-Infinity;
+  for(let bi=0;bi<curves.length;bi++) for(let i=0;i<outNumFrames;i++) if(curves[bi][i]>globalMax) globalMax=curves[bi][i];
+  if(globalMax===-Infinity||isNaN(globalMax)) throw new Error('分析失败');
+  // 保存绝对 dB FS 副本（供对比导出用）
+  const absCurves=curves.map(c=>new Float32Array(c));
+  for(let bi=0;bi<curves.length;bi++) for(let i=0;i<outNumFrames;i++) curves[bi][i]-=globalMax;
+  curves._absRef=globalMax;
+
+  return {curves,t,absCurves};
+}
+
+// ═══════════════ 渲染 ═══════════════
+function getPerceptualCurves(curves){
+  const out=curves.map((c,bi)=>{const p=new Float32Array(c.length);for(let i=0;i<c.length;i++)p[i]=(c[i]+PERCEPTUAL_OFFSET_DB[bi])*PERCEPTUAL_SLOPE;return p;});
+  let max=-Infinity;for(const c of out)for(let i=0;i<c.length;i++)if(c[i]>max)max=c[i];
+  for(const c of out)for(let i=0;i<c.length;i++)c[i]-=max;
+  out._absRef=curves._absRef;
+  return out;
+}
+
+function renderFrame(ctx,curves,t,currentT,dur,muted,mode='physical'){
+  const displayCurves=mode==='perceptual'?getPerceptualCurves(curves):curves;
+  const W=ctx.canvas.width,H=ctx.canvas.height,PW=W-M.left-M.right,PH=H-M.top-M.bottom;
+  const chartBG=MAIN_BG, chartGrid=MAIN_GRID, chartAxis=MAIN_AXIS, chartAxisText=MAIN_AXIS_TEXT, chartText=MAIN_TEXT_COLOR;
+  ctx.fillStyle='#1b2024';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=chartBG;ctx.fillRect(M.left,M.top,PW,PH);
+
+  // 网格
+  ctx.strokeStyle=chartGrid;ctx.lineWidth=0.5;
+  for(let i=0;i<=5;i++){const x=M.left+(i/5)*PW;ctx.beginPath();ctx.moveTo(x,M.top);ctx.lineTo(x,M.top+PH);ctx.stroke();}
+  for(let db=Y_BOT+12;db<=Y_TOP;db+=12){const y=M.top+PH-((db-Y_BOT)/(Y_TOP-Y_BOT))*PH;ctx.beginPath();ctx.moveTo(M.left,y);ctx.lineTo(M.left+PW,y);ctx.stroke();}
+
+  // 0 dB 线
+  const y0=M.top+PH-((0-Y_BOT)/(Y_TOP-Y_BOT))*PH;
+  ctx.strokeStyle='rgba(255,255,255,0.18)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(M.left,y0);ctx.lineTo(M.left+PW,y0);ctx.stroke();
+  ctx.fillStyle=chartAxisText;ctx.font='650 14px -apple-system,"PingFang SC",sans-serif';ctx.fillText('0 dB',M.left+6,y0-7);
+
+  // 轴
+  ctx.strokeStyle=chartAxis;ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(M.left,M.top);ctx.lineTo(M.left,M.top+PH);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(M.left,M.top+PH);ctx.lineTo(M.left+PW,M.top+PH);ctx.stroke();
+  ctx.fillStyle=chartText;ctx.font='14px -apple-system,"PingFang SC",sans-serif';ctx.textAlign='center';
+  ctx.fillText('时间 (秒)',M.left+PW/2,M.top+PH+42);
+  ctx.save();ctx.translate(M.left-54,M.top+PH/2);ctx.rotate(-Math.PI/2);ctx.fillText(mode==='perceptual'?'相对听觉贡献 (dB)':'相对衰减 (dB)',0,0);ctx.restore();
+
+  // 刻度
+  ctx.fillStyle=chartAxisText;ctx.font='650 14px -apple-system,"PingFang SC",sans-serif';ctx.textAlign='center';
+  for(let i=0;i<=Math.ceil(dur);i++){if(i>dur)break;const x=M.left+(i/dur)*PW;ctx.fillText(i===0?'0':i+'s',x,M.top+PH+19);ctx.strokeStyle=chartAxis;ctx.lineWidth=0.8;ctx.beginPath();ctx.moveTo(x,M.top+PH);ctx.lineTo(x,M.top+PH+6);ctx.stroke();}
+  ctx.fillStyle=chartAxisText;ctx.font='650 14px -apple-system,"PingFang SC",sans-serif';ctx.textAlign='right';
+  for(let db=Y_BOT;db<=Y_TOP;db+=12){const y=M.top+PH-((db-Y_BOT)/(Y_TOP-Y_BOT))*PH;ctx.fillText(db+' dB',M.left-12,y+4);}
+
+  // 曲线 — 跳过低能频段 + 到底部后截断不拖线
+  const visMask=t.filter(v=>v<=currentT);if(visMask.length<2) return;
+  const visLen=visMask.length;
+  for(let bi=0;bi<displayCurves.length;bi++){
+    if(muted&&muted.has(bi)) continue;
+    const c=displayCurves[bi],color=BANDS[bi].color;
+    let bandMax=-Infinity;for(let i=0;i<visLen;i++)if(c[i]>bandMax)bandMax=c[i];
+    if(bandMax<=Y_BOT+2) continue;
+    // 找到曲线最后一次高于 -59 dB 的位置，之后截断
+    let drawEnd=visLen;
+    for(let i=visLen-1;i>=0;i--){if(c[i]>Y_BOT+1){drawEnd=i+1;break;}}
+    if(drawEnd<2) continue;
+    const alphaMult=app.hoverAlpha?app.hoverAlpha[bi]:1;
+    // 单张图保留极弱辅助线，但取消原来的四层明显光晕，避免曲线发糊。
+    ctx.strokeStyle=color;ctx.globalAlpha=0.14*alphaMult;ctx.lineWidth=3.2;ctx.lineCap='round';ctx.beginPath();
+    const x0=M.left+(t[0]/dur)*PW,y0v=Math.max(Y_BOT,Math.min(Y_TOP,c[0])),y0=M.top+PH-((y0v-Y_BOT)/(Y_TOP-Y_BOT))*PH;
+    ctx.moveTo(x0,y0);
+    for(let i=1;i<drawEnd;i++){const x=M.left+(t[i]/dur)*PW,yv=Math.max(Y_BOT,Math.min(Y_TOP,c[i])),y=M.top+PH-((yv-Y_BOT)/(Y_TOP-Y_BOT))*PH;ctx.lineTo(x,y);}
+    ctx.stroke();
+    ctx.globalAlpha=0.95*alphaMult;ctx.lineWidth=1.7;ctx.beginPath();ctx.moveTo(x0,y0);
+    for(let i=1;i<drawEnd;i++){const x=M.left+(t[i]/dur)*PW,yv=Math.max(Y_BOT,Math.min(Y_TOP,c[i])),y=M.top+PH-((yv-Y_BOT)/(Y_TOP-Y_BOT))*PH;ctx.lineTo(x,y);}
+    ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+
+  // 播放头
+  if(currentT<dur){const px=M.left+(currentT/dur)*PW;ctx.strokeStyle='#ffffff';ctx.globalAlpha=0.5;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(px,M.top);ctx.lineTo(px,M.top+PH);ctx.stroke();ctx.globalAlpha=1;ctx.fillStyle='#fff';ctx.font='22px monospace';ctx.textAlign='right';ctx.fillText(currentT.toFixed(2)+'s',W-M.right+60,M.top+PH-8);}
+
+  // 右上角图例 — 1.5x 放大，悬停联动（与曲线共享 alpha 动画）
+  const lx=W-M.right+12,ly=M.top-2;ctx.font='650 17px -apple-system,"PingFang SC",sans-serif';
+  for(let bi=0;bi<BANDS.length;bi++){const y=ly+bi*39,mt=muted&&muted.has(bi);const hov=app.hoverTarget>=0,isHov=hov&&bi===app.hoverTarget;const la=app.hoverAlpha[bi];ctx.globalAlpha=mt?0.2:(la*0.88);ctx.fillStyle=BANDS[bi].color;ctx.fillRect(lx,y-4,isHov?48:42,isHov?12:10);ctx.fillStyle=mt?'#555':(isHov?'#ffffff':TEXT_COLOR);ctx.textAlign='left';ctx.fillText(BANDS[bi].label,lx+56,y+7);}
+  ctx.globalAlpha=1;
+
+  // 标题
+  ctx.fillStyle='#e2e6e8';ctx.font='650 24px -apple-system,"PingFang SC",sans-serif';ctx.textAlign='center';
+  ctx.fillText((app.fileName||'镲片音色衰减图谱')+(mode==='perceptual'?' · 听觉贡献':'') ,W/2,M.top-25);
+  ctx.fillStyle='#aeb8c1';ctx.font='13px -apple-system,"PingFang SC",sans-serif';
+  ctx.fillText(mode==='perceptual'?'第一阶段近似模型 · 未做声压校准 · 仅供相对比较':TARGET_DB+' dB FS 峰值归一化（图表为相对衰减）· '+BANDS.length+' 频段 · '+(dur).toFixed(1)+'s',W/2,M.top-7);
+}
+
+// ═══════════════ 状态 ═══════════════
+const app={fileName:null,audioBuffer:null,sampleRate:0,curves:null,absCurves:null,t:null,duration:0,mutedBands:new Set(),isRecording:false,hoverTarget:-1,hoverAlpha:new Float32Array(10).fill(1),hoverAnimId:null,allResults:[],fileIndex:0,slideAnimId:null,viewMode:'physical',cmpMode:'physical'};
+
+function startHoverAnim(){
+  if(app.hoverAnimId) return;
+  function tick(){
+    let changed=false;
+    for(let bi=0;bi<10;bi++){
+      const target=app.hoverTarget>=0&&bi!==app.hoverTarget?0.12:1;
+      const cur=app.hoverAlpha[bi];
+      if(Math.abs(cur-target)<0.005){app.hoverAlpha[bi]=target;}
+      else{app.hoverAlpha[bi]=cur+(target-cur)*0.08;changed=true;}
+    }
+    drawStatic();
+    updateLegendHover();
+    if(changed){app.hoverAnimId=requestAnimationFrame(tick);}
+    else{app.hoverAnimId=null;}
+  }
+  app.hoverAnimId=requestAnimationFrame(tick);
+}
+function slideToFile(newIdx,dir){
+  if(app.slideAnimId) cancelAnimationFrame(app.slideAnimId);
+  const fromC=document.createElement('canvas');fromC.width=CANVAS_W;fromC.height=CANVAS_H;
+  fromC.getContext('2d').drawImage(canvas,0,0);
+  app.fileIndex=newIdx;const r=app.allResults[newIdx];
+  app.fileName=r.fileName;app.curves=r.curves;app.absCurves=r.absCurves;
+  app.t=r.t;app.duration=r.dur;app.audioBuffer=r.audioBuf;app.sampleRate=r.sr;
+  app.mutedBands.clear();buildLegend();
+  setCurrentFileLabel(r.fileName,true);
+  document.getElementById('file-meta').textContent=r.sr/1000+'kHz · '+r.dur.toFixed(1)+'s';
+  const toC=document.createElement('canvas');toC.width=CANVAS_W;toC.height=CANVAS_H;
+  renderFrame(toC.getContext('2d'),app.curves,app.t,app.duration,app.duration,app.mutedBands,app.viewMode);
+  const dur=280,st=performance.now();
+  function tick(now){const p=Math.min(1,(now-st)/dur),e=1-Math.pow(1-p,2.5),ox=Math.round(dir*CANVAS_W*e);ctx.clearRect(0,0,CANVAS_W,CANVAS_H);ctx.drawImage(fromC,-ox,0);ctx.drawImage(toC,dir*CANVAS_W-ox,0);if(p<1) app.slideAnimId=requestAnimationFrame(tick);else{app.slideAnimId=null;updateNavArrows();}}
+  app.slideAnimId=requestAnimationFrame(tick);
+}
+function updateLegendHover(){
+  const items=document.querySelectorAll('#legend .legend-item');
+  items.forEach((el,i)=>{
+    if(app.mutedBands.has(i)) return; // muted items handled by buildLegend
+    if(app.hoverTarget>=0){
+      el.style.opacity=i===app.hoverTarget?'1':'0.2';
+      el.style.fontWeight=i===app.hoverTarget?'700':'400';
+    }else{
+      el.style.opacity='';el.style.fontWeight='';
+    }
+  });
+}
+const canvas=document.getElementById('main-canvas');canvas.width=CANVAS_W;canvas.height=CANVAS_H;
+const ctx=canvas.getContext('2d');
+
+function showError(msg){const el=document.getElementById('error-msg');el.textContent='⚠️ '+msg;el.classList.add('visible');}
+function hideError(){document.getElementById('error-msg').classList.remove('visible');}
+
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(el._tid);el._tid=setTimeout(()=>el.classList.remove('show'),2500);}
+function setAnalysisStatus(visible,label='分析中',sub='请稍候，正在处理音频数据'){
+  const el=document.getElementById('analysis-status');
+  el.querySelector('.analysis-status-label').textContent=label;
+  el.querySelector('.analysis-status-sub').textContent=sub;
+  el.classList.toggle('visible',visible);
+}
+
+function showUI(){
+  document.getElementById('canvas-wrap').classList.add('visible');
+  document.getElementById('info-bar').classList.add('visible');
+  document.getElementById('legend').classList.add('visible');
+  document.getElementById('controls').classList.add('visible');
+}
+function resetUI(){
+  setAnalysisStatus(false);
+  document.getElementById('canvas-wrap').classList.remove('visible');
+  document.getElementById('info-bar').classList.remove('visible');
+  document.getElementById('legend').classList.remove('visible');
+  document.getElementById('controls').classList.remove('visible');
+  hideError();
+}
+
+function buildLegend(){
+  const c=document.getElementById('legend');c.innerHTML='';
+  BANDS.forEach((b,i)=>{const d=document.createElement('div');d.className='legend-item active';d.innerHTML=`<div class="legend-swatch" style="background:${b.color}"></div>${b.label}`;d.onclick=()=>{if(app.mutedBands.has(i)){app.mutedBands.delete(i);d.classList.remove('muted');d.classList.add('active');}else{app.mutedBands.add(i);d.classList.add('muted');d.classList.remove('active');}drawStatic();};c.appendChild(d);});
+}
+
+function drawStatic(){if(!app.curves) return;renderFrame(ctx,app.curves,app.t,app.duration,app.duration,app.mutedBands,app.viewMode);}
+
+function drawInitialPlaceholder(msg){
+  ctx.fillStyle=BG;ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+  ctx.fillStyle='#303040';ctx.font='15px -apple-system,"PingFang SC",sans-serif';ctx.textAlign='center';
+  ctx.fillText(msg||'拖放镲片录音到上方区域开始分析',CANVAS_W/2,CANVAS_H/2);
+}
+
+function setCurrentFileLabel(text,deletable=false){
+  document.getElementById('file-name-text').textContent=text;
+  const btn=document.getElementById('btn-delete-current');
+  btn.hidden=!deletable;
+  btn.title=deletable?'删除该音频分析':'';
+}
+
+function deleteCurrentFile(){
+  if(!app.allResults.length) return;
+  const removedName=app.allResults[app.fileIndex]?.fileName||'当前文件';
+  app.allResults.splice(app.fileIndex,1);
+  app.compareData.splice(app.fileIndex,1);
+  app.cmpHoverTarget=-1;
+  if(!app.allResults.length){
+    app.fileIndex=0;app.curves=null;app.absCurves=null;app.t=null;app.audioBuffer=null;
+    document.getElementById('nav-arrows').style.display='none';
+    document.getElementById('compare-panel').style.display='none';
+    document.getElementById('btn-compare-toggle').textContent='📈 对比模式';
+    document.getElementById('cmp-count').textContent='';
+    resetUI();drawInitialPlaceholder('拖放镲片录音到上方区域开始分析');
+    toast('已删除 — '+removedName);
+    return;
+  }
+  app.fileIndex=Math.min(app.fileIndex,app.allResults.length-1);
+  const r=app.allResults[app.fileIndex];
+  app.fileName=r.fileName;app.audioBuffer=r.audioBuf;app.sampleRate=r.sr;
+  app.curves=r.curves;app.absCurves=r.absCurves;app.t=r.t;app.duration=r.dur;
+  app.mutedBands.clear();
+  setCurrentFileLabel(r.fileName,true);
+  document.getElementById('file-meta').textContent=r.sr/1000+'kHz · '+r.dur.toFixed(1)+'s';
+  document.getElementById('nav-arrows').style.display=app.allResults.length>1?'block':'none';
+  updateNavArrows();drawStatic();
+  document.getElementById('cmp-count').textContent=app.compareData.length+' 个文件';
+  if(app.allResults.length<2){
+    document.getElementById('compare-panel').style.display='none';
+    document.getElementById('btn-compare-toggle').textContent='📈 对比模式';
+  }else{initCmpBandSel();resizeCompareCanvas();}
+  toast('已删除 — '+removedName);
+}
+
+// ═══════════════ 核心分析（可复用于批量） ═══════════════
+function detectOnset(samples,sr){
+  // 用全频波形的短时包络定位真实打击起音；不能用某个频段的 STFT 曲线，
+  // 否则低频的大窗与平滑会让不同频段得到不同的“起音”。
+  const win=Math.max(1,Math.round(sr*.005));   // 5 ms 能量窗
+  const hop=Math.max(1,Math.round(sr*.001));   // 1 ms 定位步进
+  const env=[];
+  let peak=0;
+  for(let off=0;off+win<=samples.length;off+=hop){
+    let sum=0;
+    for(let i=0;i<win;i++) sum+=Math.abs(samples[off+i]);
+    const value=sum/win;
+    env.push(value);
+    if(value>peak) peak=value;
+  }
+  const threshold=peak*.12;
+  // 连续 3 ms 越过阈值，避免把单个瞬态噪点当作起音。
+  for(let i=0;i<env.length-2;i++){
+    if(env[i]>=threshold&&env[i+1]>=threshold&&env[i+2]>=threshold) return i*hop/sr;
+  }
+  return 0;
+}
+
+async function analyzeFile(file){
+  const buf=await file.arrayBuffer();
+  const actx=new AudioContext();
+  const audioBuf=await actx.decodeAudioData(buf);
+  actx.close();
+  const sr=audioBuf.sampleRate;
+  let samples;
+  if(audioBuf.numberOfChannels>1){
+    samples=new Float32Array(audioBuf.length);
+    for(let ch=0;ch<audioBuf.numberOfChannels;ch++){const d=audioBuf.getChannelData(ch);for(let i=0;i<audioBuf.length;i++)samples[i]+=d[i];}
+    for(let i=0;i<samples.length;i++)samples[i]/=audioBuf.numberOfChannels;
+  }else{samples=audioBuf.getChannelData(0);}
+  let maxAbs=0;for(let i=0;i<Math.min(10000,samples.length);i++)maxAbs=Math.max(maxAbs,Math.abs(samples[i]));
+  if(maxAbs<1e-10) throw new Error(file.name+': 静音');
+  let peak=0;for(let i=0;i<samples.length;i++)peak=Math.max(peak,Math.abs(samples[i]));
+  if(peak<1e-10) throw new Error(file.name+': 能量极低');
+  const gain=Math.pow(10,TARGET_DB/20)/peak;
+  for(let i=0;i<samples.length;i++)samples[i]*=gain;
+  const onsetT=detectOnset(samples,sr);
+  const dur=Math.min(MAX_DUR,samples.length/sr);
+  const short=samples.slice(0,Math.floor(dur*sr));
+  const {curves,t,absCurves}=analyze(short,sr);
+  let hasVariation=false;
+  for(let bi=0;bi<curves.length;bi++){const c=curves[bi];let minV=Infinity,maxV=-Infinity;for(let i=0;i<c.length;i++){minV=Math.min(minV,c[i]);maxV=Math.max(maxV,c[i]);}if(maxV-minV>2){hasVariation=true;break;}}
+  if(!hasVariation) throw new Error(file.name+': 非镲片类录音');
+  return {curves,t,absCurves,audioBuf,sr,dur,fileName:file.name,onsetT};
+}
+
+// ═══════════════ 单文件加载 ═══════════════
+async function loadAndAnalyze(file){
+  hideError();showUI();buildLegend();setAnalysisStatus(true,'分析中','正在处理 '+file.name);
+  setCurrentFileLabel('⏳ 分析中…',false);
+  document.getElementById('file-meta').textContent=file.name;
+  drawInitialPlaceholder('正在分析 "'+file.name+'" …');
+  try{
+    const r=await analyzeFile(file);
+    // 追加到累积列表（不覆盖之前的结果）
+    app.allResults.push(r);
+    app.compareData.push({fn:r.fileName,curves:r.absCurves.map(c=>new Float32Array(c)),
+      t:new Float32Array(r.t),dur:r.dur,bands:BANDS,absRef:r.curves._absRef,onsetT:r.onsetT});
+    app.fileIndex=app.allResults.length-1;
+    app.fileName=r.fileName;app.audioBuffer=r.audioBuf;app.sampleRate=r.sr;
+    app.curves=r.curves;app.absCurves=r.absCurves;app.t=r.t;app.duration=r.dur;
+    app.mutedBands.clear();
+    setCurrentFileLabel(r.fileName,true);
+    document.getElementById('file-meta').textContent=r.sr/1000+'kHz · '+(r.curves[0].length*r.t[1]||r.dur).toFixed(1)+'s · '+TARGET_DB+'dB · '+BANDS.length+'频段';
+    // 多文件时显示翻页箭头
+    const navArrows=document.getElementById('nav-arrows');
+    navArrows.style.display=app.allResults.length>1?'block':'none';
+    updateNavArrows();
+    drawStatic();buildLegend();hideError();setAnalysisStatus(false);
+    // 自动打开对比模式（≥2 个文件）
+    if(app.allResults.length>=2){
+      const panel=document.getElementById('compare-panel');
+      if(panel.style.display==='none'){
+        panel.style.display='block';
+        document.getElementById('btn-compare-toggle').textContent='📉 退出对比';
+      }
+      document.getElementById('cmp-count').textContent=app.compareData.length+' 个文件';
+      app.cmpView={xZoom:1,yZoom:1};updateCompareZoomControls();
+      initCmpBandSel();resizeCompareCanvas();
+    }
+    toast('✅ 分析完成 — '+BANDS.length+' 条频段曲线 · 共 '+app.allResults.length+' 个文件');
+  }catch(e){console.error(e);setAnalysisStatus(false);
+    if(!app.allResults.length){resetUI();drawInitialPlaceholder('❌ 出错了 — 请查看上方错误信息');}
+    showError(e.message||'分析失败');
+  }
+}
+
+// ═══════════════ 批量加载（自动进入对比模式） ═══════════════
+async function batchLoadAudio(files){
+  if(!files.length) return;
+  hideError();showUI();buildLegend();setAnalysisStatus(true,'分析中','正在准备批量处理');
+  // 批量追加：与单文件加载一致，绝不清空已经分析的文件。
+  const existingCount=app.allResults.length;
+  app.cmpView={xZoom:1,yZoom:1};
+  const total=files.length;
+  let first=null,errors=[];
+  for(let i=0;i<files.length;i++){
+    setAnalysisStatus(true,'分析中',`正在处理第 ${i+1}/${total} 个文件`);
+    setCurrentFileLabel(`⏳ 批量分析 ${i+1}/${total}…`,false);
+    document.getElementById('file-meta').textContent=files[i].name;
+    try{
+      const r=await analyzeFile(files[i]);
+      if(!first) first=r;
+      app.allResults.push(r);
+      app.compareData.push({fn:r.fileName,curves:r.absCurves.map(c=>new Float32Array(c)),
+        t:new Float32Array(r.t),dur:r.dur,bands:BANDS,absRef:r.curves._absRef,onsetT:r.onsetT});
+    }catch(e){errors.push(files[i].name+': '+e.message);}
+  }
+  // 显示翻页箭头
+  document.getElementById('nav-arrows').style.display=app.allResults.length>1?'block':'none';
+  updateNavArrows();
+  // 展示本次刚成功导入的第一张；历史文件仍可用左箭头回看。
+  if(first){
+    const firstNewIndex=existingCount;
+    app.fileIndex=firstNewIndex;
+    showUI();buildLegend();
+    app.fileName=first.fileName;app.audioBuffer=first.audioBuf;app.sampleRate=first.sr;
+    app.curves=first.curves;app.absCurves=first.absCurves;app.t=first.t;app.duration=first.dur;
+    app.mutedBands.clear();
+    setCurrentFileLabel(first.fileName+' 等 '+app.compareData.length+' 个文件',true);
+    document.getElementById('file-meta').textContent=first.sr/1000+'kHz';
+    drawStatic();
+  }
+  setAnalysisStatus(false);
+  // 打开对比面板
+  const panel=document.getElementById('compare-panel');
+  if(panel.style.display==='none'){
+    panel.style.display='block';
+    document.getElementById('btn-compare-toggle').textContent='📉 退出对比';
+  }
+  document.getElementById('cmp-count').textContent=app.compareData.length+' 个文件';
+  initCmpBandSel();resizeCompareCanvas();
+  if(errors.length) toast('⚠️ '+errors.length+' 个失败: '+errors.join('; ').slice(0,80));
+  else toast('✅ '+app.compareData.length+' 个文件已加载到对比模式');
+}
+
+// ═══════════════ PNG 二进制工具 ═══════════════
+const _crcTable=new Uint32Array(256);
+for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;_crcTable[n]=c;}
+function crc32(buf){let c=0xFFFFFFFF;for(let i=0;i<buf.length;i++)c=_crcTable[(c^buf[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+
+function embedJSONinPNG(pngBuf,jsonStr){
+  const d=new Uint8Array(pngBuf),iend=d.length-12;
+  const kw=new TextEncoder().encode('cymbal_data'),txt=new TextEncoder().encode(jsonStr);
+  const cd=new Uint8Array(kw.length+1+txt.length);cd.set(kw,0);cd.set(txt,kw.length+1);
+  const tb=new TextEncoder().encode('tEXt'),cb=new Uint8Array(4+cd.length);
+  cb.set(tb,0);cb.set(cd,4);
+  const out=new Uint8Array(iend+12+cd.length);
+  out.set(d.subarray(0,iend),0);
+  new DataView(out.buffer).setUint32(iend,cd.length);
+  out.set(tb,iend+4);out.set(cd,iend+8);
+  new DataView(out.buffer).setUint32(iend+8+cd.length,crc32(cb));
+  out.set(d.subarray(iend),iend+12+cd.length);
+  return out.buffer;
+}
+
+function extractJSONfromPNG(buf){
+  const d=new Uint8Array(buf),dv=new DataView(buf);
+  let pos=8; // skip signature
+  while(pos<d.length-8){
+    const len=dv.getUint32(pos),type=String.fromCharCode(...d.subarray(pos+4,pos+8));
+    if(type==='tEXt'){
+      const data=d.subarray(pos+8,pos+8+len);
+      const nul=data.indexOf(0);
+      if(nul>=0&&new TextDecoder().decode(data.subarray(0,nul))==='cymbal_data')
+        return JSON.parse(new TextDecoder().decode(data.subarray(nul+1)));
+    }
+    pos+=12+len;
+  }
+  return null;
+}
+
+// ═══════════════ PNG 保存（含嵌入 JSON） ═══════════════
+function savePNG(){
+  if(!app.curves) return;
+  drawStatic();
+  canvas.toBlob(b=>{
+    b.arrayBuffer().then(raw=>{
+      const json={v:1,fn:app.fileName,sr:app.sampleRate,dur:app.duration,
+        bands:BANDS.map((b,i)=>({lo:b.lo,hi:b.hi,label:b.label,color:b.color})),
+        curves:app.absCurves.map(c=>Array.from(c)),t:Array.from(app.t),
+        absRef:app.curves._absRef,onsetT:app.allResults[app.fileIndex]?.onsetT};
+      const enriched=embedJSONinPNG(raw,JSON.stringify(json));
+      const u=URL.createObjectURL(new Blob([enriched],{type:'image/png'}));
+      const a=document.createElement('a');a.href=u;
+      a.download=(app.fileName||'cymbal').replace(/\.[^.]+$/,'')+'_decay.png';
+      a.click();URL.revokeObjectURL(u);toast('✅ 静态图已保存（含分析数据）');
+    });
+  },'image/png');
+}
+
+// ═══════════════ 视频录制 ═══════════════
+async function recordVideo(){
+  if(!app.curves||!app.audioBuffer||app.isRecording) return;
+  if(typeof MediaRecorder==='undefined'){toast('⚠️ 浏览器不支持录制，请用 Chrome/Edge');return;}
+  app.isRecording=true;const btn=document.getElementById('btn-record');btn.textContent='⏺ 录制中…';btn.disabled=true;
+  const rc=document.createElement('canvas');rc.width=CANVAS_W;rc.height=CANVAS_H;const rctx=rc.getContext('2d');
+  const cs=rc.captureStream(30),actx=new AudioContext(),src=actx.createBufferSource();src.buffer=app.audioBuffer;
+  const gn=actx.createGain();gn.gain.value=1;src.connect(gn);
+  const ad=actx.createMediaStreamDestination();gn.connect(ad);
+  const tracks=[...cs.getVideoTracks(),...ad.stream.getAudioTracks()];
+  let mt=null,ext='webm';
+  if(MediaRecorder.isTypeSupported('video/mp4')){mt='video/mp4';ext='mp4';}
+  else if(MediaRecorder.isTypeSupported('video/webm;codecs=vp9')){mt='video/webm;codecs=vp9';}
+  else if(MediaRecorder.isTypeSupported('video/webm;codecs=vp8')){mt='video/webm;codecs=vp8';}
+  else{toast('⚠️ 浏览器不支持录制');actx.close();app.isRecording=false;btn.textContent='🎬 录制动态视频';btn.disabled=false;return;}
+  const rec=new MediaRecorder(new MediaStream(tracks),{mimeType:mt,videoBitsPerSecond:6e6});
+  const chunks=[];rec.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+  rec.onstop=()=>{const b=new Blob(chunks,{type:mt}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=(app.fileName||'cymbal').replace(/\.[^.]+$/,'')+'_decay.'+ext;a.click();URL.revokeObjectURL(u);actx.close();app.isRecording=false;btn.textContent='🎬 录制动态视频';btn.disabled=false;toast('✅ 视频已保存 ('+ext.toUpperCase()+')');};
+  rec.onerror=()=>{actx.close();app.isRecording=false;btn.textContent='🎬 录制动态视频';btn.disabled=false;toast('⚠️ 录制失败');};
+  const st=actx.currentTime,dur=app.duration;
+  function drawRF(){if(!app.isRecording)return;const el=actx.currentTime-st;if(el>=dur+0.05){rec.stop();src.stop();return;}renderFrame(rctx,app.curves,app.t,Math.min(el,dur),dur,app.mutedBands,app.viewMode);requestAnimationFrame(drawRF);}
+  renderFrame(rctx,app.curves,app.t,0,dur,app.mutedBands,app.viewMode);rec.start();src.start(0,0,dur);requestAnimationFrame(drawRF);
+  toast('⏺ 录制中… '+dur.toFixed(0)+' 秒后自动保存');
+}
+
+// ═══════════════ 事件 ═══════════════
+const dz=document.getElementById('drop-zone'),fi=document.getElementById('file-input');
+document.getElementById('btn-pick').addEventListener('click',e=>{e.stopPropagation();fi.click();});
+dz.addEventListener('click',()=>fi.click());
+fi.addEventListener('change',()=>{
+  const fs=Array.from(fi.files);
+  if(fs.length===1) loadAndAnalyze(fs[0]);
+  else if(fs.length>1) batchLoadAudio(fs);
+});
+
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('drag-over'));
+dz.addEventListener('drop',e=>{e.preventDefault();e.stopPropagation();dz.classList.remove('drag-over');const fs=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('audio/')||f.name.match(/\.(wav|mp3|aiff|flac|ogg|m4a)$/i));if(fs.length===1) loadAndAnalyze(fs[0]);else if(fs.length>1) batchLoadAudio(fs);else toast('⚠️ 请拖放音频文件');});
+
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>{e.preventDefault();if(!app.curves){const fs=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('audio/')||f.name.match(/\.(wav|mp3|aiff|flac|ogg|m4a)$/i));if(fs.length===1) loadAndAnalyze(fs[0]);else if(fs.length>1) batchLoadAudio(fs);}});
+
+document.getElementById('btn-save-png').addEventListener('click',savePNG);
+document.getElementById('btn-record').addEventListener('click',recordVideo);
+document.getElementById('btn-view-mode').addEventListener('click',()=>{
+  app.viewMode=app.viewMode==='physical'?'perceptual':'physical';
+  const btn=document.getElementById('btn-view-mode');
+  btn.textContent=app.viewMode==='perceptual'?'📉 物理衰减':'👂 听觉贡献';
+  btn.classList.toggle('mode-active',app.viewMode==='perceptual');
+  drawStatic();
+});
+document.getElementById('btn-delete-current').addEventListener('click',deleteCurrentFile);
+document.getElementById('btn-reset').addEventListener('click',()=>{app.curves=null;app.audioBuffer=null;app.allResults=[];app.compareData=[];app.fileIndex=0;app.cmpView={xZoom:1,yZoom:1};setCurrentFileLabel('',false);document.getElementById('nav-arrows').style.display='none';resetUI();document.getElementById('compare-panel').style.display='none';document.getElementById('btn-compare-toggle').textContent='📈 对比模式';document.getElementById('cmp-count').textContent='';updateCompareZoomControls();drawInitialPlaceholder('拖放镲片录音到上方区域开始分析');});
+document.getElementById('nav-prev').addEventListener('click',()=>{if(app.fileIndex>0) slideToFile(app.fileIndex-1,-1);});
+document.getElementById('nav-next').addEventListener('click',()=>{if(app.fileIndex<app.allResults.length-1) slideToFile(app.fileIndex+1,1);});
+
+function updateNavArrows(){
+  document.getElementById('nav-prev').style.display=app.fileIndex>0?'':'none';
+  document.getElementById('nav-next').style.display=app.fileIndex<app.allResults.length-1?'':'none';
+}
+
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='s'){e.preventDefault();savePNG();}});
+
+// ═══════════════ 鼠标悬停高亮（带动画淡入淡出） ═══════════════
+canvas.addEventListener('mousemove',e=>{
+  if(!app.curves) return;
+  const r=canvas.getBoundingClientRect();
+  const sx=CANVAS_W/r.width,sy=CANVAS_H/r.height;
+  const mx=(e.clientX-r.left)*sx,my=(e.clientY-r.top)*sy;
+  const PW=CANVAS_W-M.left-M.right,PH=CANVAS_H-M.top-M.bottom;
+  // 右侧图例区域检测
+  const lx=CANVAS_W-M.right-10,ly=M.top-2,lh=BANDS.length*39;
+  if(mx>=lx&&my>=ly&&my<=ly+lh){
+    const bi=Math.floor((my-ly)/39);
+    if(bi>=0&&bi<BANDS.length&&!app.mutedBands.has(bi)){
+      if(bi!==app.hoverTarget){app.hoverTarget=bi;canvas.style.cursor='pointer';startHoverAnim();}
+      return;
+    }
+  }
+  if(mx<M.left||mx>M.left+PW||my<M.top||my>M.top+PH){
+    if(app.hoverTarget!==-1){app.hoverTarget=-1;canvas.style.cursor='default';startHoverAnim();}
+    return;
+  }
+  const tv=((mx-M.left)/PW)*app.duration;
+  let fi=0;while(fi<app.t.length-1&&app.t[fi+1]<tv)fi++;
+  let best=-1,bestDist=28;
+  for(let bi=0;bi<app.curves.length;bi++){
+    if(app.mutedBands.has(bi)) continue;
+    const c=app.curves[bi];
+    const yv=Math.max(Y_BOT,Math.min(Y_TOP,c[Math.min(fi,c.length-1)]));
+    const py=M.top+PH-((yv-Y_BOT)/(Y_TOP-Y_BOT))*PH;
+    const d=Math.abs(my-py);
+    if(d<bestDist){bestDist=d;best=bi;}
+  }
+  if(best!==app.hoverTarget){app.hoverTarget=best;canvas.style.cursor=best>=0?'pointer':'default';startHoverAnim();}
+});
+canvas.addEventListener('mouseleave',()=>{
+  if(app.hoverTarget!==-1){app.hoverTarget=-1;canvas.style.cursor='default';startHoverAnim();}
+});
+
+// ═══════════════ 对比模式 ═══════════════
+// 对比图不使用主图的 M.right（主图需给右侧频段图例留 190px）。
+const CMP_M={top:66,right:62,bottom:72,left:88};
+const CMP_ITEMS_PER_ROW=5,CMP_LEGEND_ROW_H=100,CMP_LEGEND_GAP=30,CMP_MIN_PLOT_H=430,CMP_MAX_PLOT_H=610;
+const CMP_ZOOM_LEVELS=[1,1.5,2,3,4];
+const CMP_LEGEND_FONT=28;
+const CMP_LEGEND_SWATCH_W=68;
+const cmpCanvas=document.getElementById('cmp-canvas');
+const cmpCtx=cmpCanvas.getContext('2d');
+app.compareData=[]; // [{fn,curves,t,dur,bands,absRef}]
+app.compareBand=3; // default band index
+app.cmpHoverTarget=-1; app.cmpHoverAlpha=new Float32Array(8).fill(1); app.cmpHoverId=null;
+app.cmpLegendHitBoxes=[];
+app.cmpView={xZoom:1,yZoom:1};
+
+function getCompareLayout(fileCount=app.compareData.length,displayWidth=cmpCanvas.clientWidth||CANVAS_W){
+  const legendRows=Math.max(1,Math.ceil(fileCount / CMP_ITEMS_PER_ROW));
+  const canvasW=Math.max(760,Math.round(displayWidth*2)); // Retina 导出/显示都保留清晰度
+  // 对比图绘图区沿用主图的可视长宽比例，避免两张图看起来一宽一扁。
+  const plotH=Math.max(CMP_MIN_PLOT_H,Math.round((canvasW-CMP_M.left-CMP_M.right)*(CANVAS_H-M.top-M.bottom)/(CANVAS_W-M.left-M.right)));
+  const legendH=CMP_LEGEND_GAP+legendRows*CMP_LEGEND_ROW_H;
+  return {W:canvasW,H:CMP_M.top+plotH+CMP_M.bottom+legendH,plotH,legendH,legendRows};
+}
+
+function resizeCompareCanvas(){
+  const wrap=document.getElementById('cmp-wrap');
+  const displayWidth=wrap.clientWidth||Math.min(1100,window.innerWidth-48);
+  const layout=getCompareLayout(app.compareData.length,displayWidth);
+  if(cmpCanvas.width!==layout.W||cmpCanvas.height!==layout.H){
+    cmpCanvas.width=layout.W;cmpCanvas.height=layout.H;
+  }
+  cmpCanvas.style.height=(layout.H/layout.W*displayWidth)+'px';
+  drawCompare();
+}
+new ResizeObserver(resizeCompareCanvas).observe(document.getElementById('cmp-wrap'));
+
+function startCmpHoverAnim(){
+  if(app.cmpHoverId) return;
+  function tick(){
+    let changed=false;
+    for(let di=0;di<app.compareData.length;di++){
+      const target=app.cmpHoverTarget>=0&&di!==app.cmpHoverTarget?0.12:1;
+      const cur=app.cmpHoverAlpha[di];
+      if(Math.abs(cur-target)<0.005){app.cmpHoverAlpha[di]=target;}
+      else{app.cmpHoverAlpha[di]=cur+(target-cur)*0.08;changed=true;}
+    }
+    drawCompare();
+    if(changed){app.cmpHoverId=requestAnimationFrame(tick);}
+    else{app.cmpHoverId=null;}
+  }
+  app.cmpHoverId=requestAnimationFrame(tick);
+}
+
+function initCmpBandSel(){
+  const sel=document.getElementById('cmp-band');
+  sel.innerHTML=BANDS.map((b,i)=>`<option value="${i}" ${i===app.compareBand?'selected':''}>${b.label}</option>`).join('');
+  sel.onchange=()=>{app.compareBand=+sel.value;drawCompare();};
+}
+document.getElementById('cmp-align').addEventListener('change',drawCompare);
+
+const CMP_PRE_ONSET_S=.2;
+function getCompareView(aligned){
+  const isAligned=document.getElementById('cmp-align').checked;
+  // 对齐后只保留 0.2 秒前导，足够看清起音前基线，避免空白段挤占横轴。
+  const fullMinT=isAligned?-CMP_PRE_ONSET_S:0;
+  const fullMaxT=isAligned?Math.max(...aligned.map(a=>a.t[a.t.length-1])):Math.max(...app.compareData.map(d=>d.dur));
+  const fullXRange=Math.max(.001,fullMaxT-fullMinT);
+  const xMax=fullMinT+fullXRange/app.cmpView.xZoom;
+  const yMin=Y_BOT/app.cmpView.yZoom;
+  return {minT:fullMinT,maxT:xMax,xRange:xMax-fullMinT,yMin,yMax:Y_TOP};
+}
+
+function getCompareLegendHit(mx,my){
+  for(const hit of app.cmpLegendHitBoxes){
+    if(mx>=hit.x&&mx<=hit.x+hit.w&&my>=hit.y&&my<=hit.y+hit.h) return hit.index;
+  }
+  return -1;
+}
+
+function updateCompareZoomControls(){
+  const {xZoom,yZoom}=app.cmpView;
+  document.getElementById('cmp-x-zoom-value').textContent=xZoom+'×';
+  document.getElementById('cmp-y-zoom-value').textContent=yZoom+'×';
+  const xi=CMP_ZOOM_LEVELS.indexOf(xZoom),yi=CMP_ZOOM_LEVELS.indexOf(yZoom);
+  document.getElementById('btn-cmp-x-minus').disabled=xi<=0;
+  document.getElementById('btn-cmp-x-plus').disabled=xi>=CMP_ZOOM_LEVELS.length-1;
+  document.getElementById('btn-cmp-y-minus').disabled=yi<=0;
+  document.getElementById('btn-cmp-y-plus').disabled=yi>=CMP_ZOOM_LEVELS.length-1;
+}
+
+function adjustCompareZoom(axis,delta){
+  const key=axis+'Zoom',index=CMP_ZOOM_LEVELS.indexOf(app.cmpView[key]);
+  app.cmpView[key]=CMP_ZOOM_LEVELS[Math.max(0,Math.min(CMP_ZOOM_LEVELS.length-1,index+delta))];
+  updateCompareZoomControls();drawCompare();
+}
+
+function resetCompareView(){
+  app.cmpView={xZoom:1,yZoom:1};updateCompareZoomControls();drawCompare();
+}
+
+function getLegacyBandOnset(curve,t){
+  const baseline=curve.slice(0,Math.min(30,curve.length)).reduce((a,b)=>Math.min(a,b),Infinity);
+  for(let i=0;i<curve.length;i++) if(curve[i]>baseline+6) return t[i];
+  return 0;
+}
+
+function getComparisonOnset(data,bandIndex){
+  // 新分析结果使用全频波形的统一起音；旧版嵌入 PNG 没有该元数据时保留兼容回退。
+  return Number.isFinite(data.onsetT) ? data.onsetT : getLegacyBandOnset(data.curves[bandIndex],data.t);
+}
+
+function drawCompare(){
+  const {W,H,plotH:PH}=getCompareLayout(app.compareData.length,(cmpCanvas.width||CANVAS_W)/2);
+  const PW=W-CMP_M.left-CMP_M.right;
+  const plotX=CMP_M.left,plotY=CMP_M.top,plotBottom=plotY+PH;
+  app.cmpLegendHitBoxes=[];
+  cmpCtx.fillStyle='#f8fafb';cmpCtx.fillRect(0,0,W,H);
+  cmpCtx.fillStyle=BG;cmpCtx.fillRect(plotX,plotY,PW,PH);
+  cmpCtx.strokeStyle='rgba(28,37,45,.10)';cmpCtx.strokeRect(plotX+.5,plotY+.5,PW-1,PH-1);
+  if(!app.compareData.length){cmpCtx.fillStyle='#303040';cmpCtx.font='15px -apple-system,"PingFang SC",sans-serif';cmpCtx.textAlign='center';cmpCtx.fillText('拖放含分析数据的 PNG 文件到上方区域',W/2,H/2);return;}
+
+  // 网格（视图缩放后与曲线共享同一坐标范围）
+  const bi=app.compareBand;
+  const doAlign=document.getElementById('cmp-align').checked;
+  const aligned=app.compareData.map(d=>{
+    const sourceCurves=app.cmpMode==='perceptual'?getPerceptualCurves(d.curves):d.curves;
+    const c=sourceCurves[bi],t=d.t;
+    const onsetT=getComparisonOnset(d,bi);
+    const st=t.map(ti=>ti-onsetT);
+    let peak=-Infinity;for(let i=0;i<c.length;i++)if(c[i]>peak)peak=c[i];
+    return {curve:c,t:doAlign?st:t,peak,fn:d.fn};
+  });
+  const view=getCompareView(aligned);
+  const mapX=t=>plotX+((t-view.minT)/view.xRange)*PW;
+  const mapY=db=>plotY+PH-((Math.min(view.yMax,Math.max(view.yMin,db))-view.yMin)/(view.yMax-view.yMin))*PH;
+  const yStep=view.yMin<=-45?12:view.yMin<=-28?6:view.yMin<=-18?3:2;
+  cmpCtx.strokeStyle=GRID;cmpCtx.lineWidth=0.5;
+  for(let i=0;i<=5;i++){const x=plotX+(i/5)*PW;cmpCtx.beginPath();cmpCtx.moveTo(x,plotY);cmpCtx.lineTo(x,plotBottom);cmpCtx.stroke();}
+  for(let db=Math.ceil(view.yMin/yStep)*yStep;db<=view.yMax;db+=yStep){const y=mapY(db);cmpCtx.beginPath();cmpCtx.moveTo(plotX,y);cmpCtx.lineTo(plotX+PW,y);cmpCtx.stroke();}
+  cmpCtx.strokeStyle=AXIS;cmpCtx.lineWidth=1;
+  cmpCtx.beginPath();cmpCtx.moveTo(plotX,plotY);cmpCtx.lineTo(plotX,plotBottom);cmpCtx.stroke();
+  cmpCtx.beginPath();cmpCtx.moveTo(plotX,plotBottom);cmpCtx.lineTo(plotX+PW,plotBottom);cmpCtx.stroke();
+
+  // 标签
+  cmpCtx.fillStyle=AXIS_TEXT;cmpCtx.font='650 14px -apple-system,"PingFang SC",sans-serif';cmpCtx.textAlign='center';
+  cmpCtx.fillText('时间 (秒)',plotX+PW/2,plotBottom+42);
+  cmpCtx.save();cmpCtx.translate(plotX-54,plotY+PH/2);cmpCtx.rotate(-Math.PI/2);cmpCtx.fillText(app.cmpMode==='perceptual'?'相对听觉贡献 (dB)':'相对衰减 (dB)',0,0);cmpCtx.restore();
+  cmpCtx.fillStyle=AXIS_TEXT;cmpCtx.textAlign='right';cmpCtx.font='650 14px -apple-system,"PingFang SC",sans-serif';
+  for(let db=Math.ceil(view.yMin/yStep)*yStep;db<=view.yMax;db+=yStep){const y=mapY(db);cmpCtx.fillText(db+' dB',plotX-12,y+4);}
+
+  // 统一时间轴 + 起音对齐
+  cmpCtx.fillStyle=AXIS_TEXT;cmpCtx.font='650 14px -apple-system,"PingFang SC",sans-serif';cmpCtx.textAlign='center';
+  const tickStep=view.xRange>3?(view.xRange>6?2:1):view.xRange>1?.5:.2;
+  const firstTick=Math.ceil(view.minT/tickStep)*tickStep;
+  for(let tv=firstTick;tv<=view.maxT+tickStep*.01;tv+=tickStep){const x=mapX(tv);if(x>=plotX-1&&x<=plotX+PW+1) cmpCtx.fillText(tv.toFixed(1)+'s',x,plotBottom+18);}
+
+  // 文件级颜色：深芥末金替代亮黄，确保在浅色对比图上有足够对比度。
+  const cmpColors=['#D95757','#238F91','#A66D17','#3F8B5B','#7A52B3','#C96E2C','#287CA0','#B04D78'];
+  const cmpStyles=[[],[6,3],[3,3],[8,3,3,3]];
+  for(let di=0;di<aligned.length;di++){
+    const d=aligned[di],color=cmpColors[di%cmpColors.length],c=d.curve,t=d.t,peak=d.peak;
+    cmpCtx.strokeStyle=color;cmpCtx.globalAlpha=0.92*(app.cmpHoverAlpha[di]||1);cmpCtx.lineWidth=2.5;
+    const dashPat=cmpStyles[di%cmpStyles.length];
+    if(dashPat.length>1) cmpCtx.setLineDash(dashPat);
+    cmpCtx.lineCap='round';cmpCtx.beginPath();
+    let started=false;
+    for(let i=0;i<c.length;i++){
+      const yv=c[i]-peak;
+      // 低于视图下界时可以跳过该点，但不能停止整条曲线：
+      // 很多录音的静音前导段先在 -60 dB 以下，随后才出现真正的打击与完整衰减。
+      if(t[i]<view.minT) continue;
+      if(t[i]>view.maxT) break;
+      if(yv<view.yMin){started=false;continue;}
+      const x=mapX(t[i]),y=mapY(yv);
+      if(!started){cmpCtx.moveTo(x,y);started=true;}else{cmpCtx.lineTo(x,y);}
+    }
+    cmpCtx.stroke();cmpCtx.setLineDash([]);
+  }
+
+  // 底部图例 — X轴标签下方，色块在上名称在下居中
+  const legendY=plotBottom+70;
+  const colW=PW/CMP_ITEMS_PER_ROW;
+  const n=app.compareData.length;
+  cmpCtx.font='650 '+CMP_LEGEND_FONT+'px -apple-system,"PingFang SC",sans-serif';
+  for(let di=0;di<n;di++){
+    const row=Math.floor(di/CMP_ITEMS_PER_ROW),col=di%CMP_ITEMS_PER_ROW;
+    const cx=plotX+colW*(col+0.5),cy=legendY+row*CMP_LEGEND_ROW_H;
+    // 色块
+    const legendAlpha=app.cmpHoverTarget>=0&&di!==app.cmpHoverTarget?.12:1;
+    cmpCtx.globalAlpha=legendAlpha;
+    cmpCtx.fillStyle=cmpColors[di%cmpColors.length];
+    cmpCtx.fillRect(cx-CMP_LEGEND_SWATCH_W/2,cy,CMP_LEGEND_SWATCH_W,10);
+    cmpCtx.strokeStyle='rgba(255,255,255,.26)';cmpCtx.lineWidth=1;cmpCtx.strokeRect(cx-CMP_LEGEND_SWATCH_W/2+.5,cy+.5,CMP_LEGEND_SWATCH_W-1,9);
+    // 文件名（截断到适合列宽）
+    const fn=app.compareData[di].fn||'文件 '+(di+1);
+    const maxW=colW-12;
+    cmpCtx.fillStyle=TEXT_COLOR;cmpCtx.textAlign='center';
+    let display=fn;cmpCtx.font='650 '+CMP_LEGEND_FONT+'px -apple-system,"PingFang SC",sans-serif';
+    while(cmpCtx.measureText(display).width>maxW&&display.length>4) display=display.slice(0,-4)+'…';
+    cmpCtx.fillText(display,cx,cy+46);
+    app.cmpLegendHitBoxes.push({index:di,x:cx-colW/2,y:cy-12,w:colW,h:68});
+  }
+  cmpCtx.globalAlpha=1;
+
+  // 标题
+  const band=BANDS[app.compareBand];
+  cmpCtx.fillStyle='#f1f1f6';cmpCtx.font='650 22px -apple-system,"PingFang SC",sans-serif';cmpCtx.textAlign='center';
+  cmpCtx.fillText(`${app.cmpMode==='perceptual'?'听觉贡献对比':'频段对比'}：${band.label}  ·  ${n} 个文件`,W/2,34);
+}
+
+function addCompareFiles(files){
+  const promises=[];
+  for(const f of files){
+    promises.push(f.arrayBuffer().then(buf=>{
+      const json=extractJSONfromPNG(buf);
+      if(!json) throw new Error('PNG 不含分析数据');
+      return {fn:json.fn||f.name,curves:json.curves.map(c=>new Float32Array(c)),
+        t:new Float32Array(json.t),dur:json.dur,bands:json.bands,absRef:json.absRef,onsetT:json.onsetT};
+    }));
+  }
+  Promise.all(promises).then(datas=>{
+    for(const d of datas) app.compareData.push(d);
+    document.getElementById('cmp-count').textContent=`${app.compareData.length} 个文件`;
+    resizeCompareCanvas();
+  }).catch(e=>toast('⚠️ '+e.message));
+}
+
+// 对比面板事件
+document.getElementById('btn-compare-toggle').addEventListener('click',()=>{
+  const panel=document.getElementById('compare-panel');
+  const visible=panel.style.display!=='none';
+  panel.style.display=visible?'none':'block';
+  document.getElementById('btn-compare-toggle').textContent=visible?'📈 对比模式':'📉 退出对比';
+  if(!visible){initCmpBandSel();requestAnimationFrame(resizeCompareCanvas);}
+});
+
+document.getElementById('btn-cmp-pick').addEventListener('click',()=>document.getElementById('cmp-files').click());
+document.getElementById('cmp-files').addEventListener('change',function(){if(this.files.length) addCompareFiles(this.files);this.value='';});
+document.getElementById('btn-cmp-mode').addEventListener('click',()=>{
+  app.cmpMode=app.cmpMode==='physical'?'perceptual':'physical';
+  const btn=document.getElementById('btn-cmp-mode');
+  btn.textContent=app.cmpMode==='perceptual'?'📉 物理衰减':'👂 听觉贡献';
+  btn.classList.toggle('mode-active',app.cmpMode==='perceptual');
+  drawCompare();
+});
+document.getElementById('btn-cmp-x-minus').addEventListener('click',()=>adjustCompareZoom('x',-1));
+document.getElementById('btn-cmp-x-plus').addEventListener('click',()=>adjustCompareZoom('x',1));
+document.getElementById('btn-cmp-y-minus').addEventListener('click',()=>adjustCompareZoom('y',-1));
+document.getElementById('btn-cmp-y-plus').addEventListener('click',()=>adjustCompareZoom('y',1));
+document.getElementById('btn-cmp-view-reset').addEventListener('click',resetCompareView);
+
+const cmpPanel=document.getElementById('compare-panel');
+cmpPanel.addEventListener('dragover',e=>{e.preventDefault();});
+cmpPanel.addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer.files.length) addCompareFiles(e.dataTransfer.files);});
+
+document.getElementById('btn-cmp-clear').addEventListener('click',()=>{app.compareData=[];app.cmpHoverTarget=-1;document.getElementById('cmp-count').textContent='';resizeCompareCanvas();});
+
+document.getElementById('btn-cmp-png').addEventListener('click',()=>{
+  if(!app.compareData.length) return;
+  drawCompare();
+  cmpCanvas.toBlob(b=>{
+    b.arrayBuffer().then(raw=>{
+      // 也嵌入综合 JSON
+      const json={v:1,fn:'对比',compareData:app.compareData.map(d=>({
+        fn:d.fn,curves:d.curves.map(c=>Array.from(c)),t:Array.from(d.t),dur:d.dur,absRef:d.absRef
+      })),band:app.compareBand};
+      const enriched=embedJSONinPNG(raw,JSON.stringify(json));
+      const u=URL.createObjectURL(new Blob([enriched],{type:'image/png'}));
+      const a=document.createElement('a');a.href=u;a.download='对比_'+BANDS[app.compareBand].label.replace(/[^a-zA-Z0-9.\-]/g,'_')+'.png';
+      a.click();URL.revokeObjectURL(u);toast('✅ 对比图已保存');
+    });
+  },'image/png');
+});
+
+initCmpBandSel();
+updateCompareZoomControls();
+resizeCompareCanvas();
+
+// 对比图悬停（简化定位）
+cmpCanvas.addEventListener('mousemove',e=>{
+  if(!app.compareData.length) return;
+  const r=cmpCanvas.getBoundingClientRect();
+  const sx=cmpCanvas.width/r.width,sy=cmpCanvas.height/r.height;
+  const mx=(e.clientX-r.left)*sx,my=(e.clientY-r.top)*sy;
+  const legendTarget=getCompareLegendHit(mx,my);
+  if(legendTarget>=0){
+    if(legendTarget!==app.cmpHoverTarget){app.cmpHoverTarget=legendTarget;cmpCanvas.style.cursor='pointer';startCmpHoverAnim();}
+    return;
+  }
+  const layout=getCompareLayout(app.compareData.length,cmpCanvas.width/2);
+  const PW=layout.W-CMP_M.left-CMP_M.right,cmpPH=layout.plotH;
+  const plotBottom=CMP_M.top+cmpPH;
+  if(mx<CMP_M.left||mx>CMP_M.left+PW||my<CMP_M.top||my>plotBottom){if(app.cmpHoverTarget!==-1){app.cmpHoverTarget=-1;cmpCanvas.style.cursor='default';startCmpHoverAnim();}return;}
+  const bi=app.compareBand,doAlign=document.getElementById('cmp-align').checked;
+  // 计算统一 x 轴范围
+  const aligned2=app.compareData.map(d=>{
+    const sourceCurves=app.cmpMode==='perceptual'?getPerceptualCurves(d.curves):d.curves;
+    const c=sourceCurves[bi],t=d.t;
+    const onsetT=getComparisonOnset(d,bi);
+    return {t:doAlign?t.map(ti=>ti-onsetT):t,c,peak:Math.max(...c)};
+  });
+  const view2=getCompareView(aligned2);
+  const tVal=view2.minT+((mx-CMP_M.left)/PW)*view2.xRange;
+  let best=-1,bestDist=28;
+  for(let di=0;di<aligned2.length;di++){
+    const a=aligned2[di];
+    let fi=0;while(fi<a.t.length-1&&a.t[fi+1]<tVal)fi++;
+    const yv=a.c[Math.min(fi,a.c.length-1)]-a.peak;
+    if(yv<view2.yMin||a.t[Math.min(fi,a.t.length-1)]>view2.maxT) continue;
+    const py=CMP_M.top+cmpPH-((Math.min(view2.yMax,Math.max(view2.yMin,yv))-view2.yMin)/(view2.yMax-view2.yMin))*cmpPH;
+    if(Math.abs(my-py)<bestDist){bestDist=Math.abs(my-py);best=di;}
+  }
+  if(best!==app.cmpHoverTarget){app.cmpHoverTarget=best;cmpCanvas.style.cursor=best>=0?'pointer':'default';startCmpHoverAnim();}
+});
+cmpCanvas.addEventListener('mouseleave',()=>{if(app.cmpHoverTarget!==-1){app.cmpHoverTarget=-1;cmpCanvas.style.cursor='default';startCmpHoverAnim();}});
+
+// 初始占位
+drawInitialPlaceholder('拖放镲片录音到此处，或点击「选择文件」');
+</script>
+</body>
+</html>
