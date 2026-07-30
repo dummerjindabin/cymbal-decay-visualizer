@@ -15,3 +15,5 @@
 - Documented cross-browser video capability detection
 - Improved PNG download reliability across browsers
 - Replaced the example screenshot with the single-recording `istanbul 21 xist` decay chart
+- Merged the English documentation into the main README
+- Added an example MP4 video link

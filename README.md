@@ -52,26 +52,75 @@ open -a Safari index.html
 
 ## English
 
-English documentation: [`README_EN.md`](README_EN.md)
+# Cymbal Decay Visualizer
 
-## 示例
+A browser-based tool for visualizing cymbal-recording decay across ten frequency bands.
+
+Drop an audio file into the page to inspect its relative decay curves, or load multiple recordings to compare their sustain behavior and onset alignment.
+
+### Features
+
+- Drag-and-drop or file-picker support for WAV, MP3, AIFF, FLAC, OGG, and M4A
+- Adaptive multi-window STFT
+- Ten logarithmic frequency bands from 300 Hz to 22 kHz
+- Single-file decay visualization
+- Append additional files without replacing previous analyses
+- Previous/next navigation through analyzed files
+- Delete the current analysis without deleting the others
+- Multi-file comparison mode
+- Unified onset detection and alignment
+- Comparison view with only 0.2 seconds of pre-onset context
+- Physical decay and first-stage relative auditory-contribution views
+- X/Y comparison zoom
+- PNG export with embedded analysis data
+- Video export selected by browser capability: MP4 when supported, otherwise WebM
+
+### Usage
+
+Open `index.html` in a modern browser. You can also double-click the file.
+
+Recommended browsers: Safari, Chrome, Edge, or Firefox.
+
+Audio analysis requires the Web Audio API. Audio is processed locally in the browser and is not automatically uploaded.
+
+### Analysis method
+
+```text
+Audio decode → mono → peak normalization to -12 dB FS
+→ adaptive multi-window STFT
+→ ten-band RMS aggregation
+→ dB curves
+→ relative normalization
+→ visualization
+```
+
+The auditory-contribution view is a first-stage approximation for relative comparison within the same recording workflow. It is not an ISO 532-1, phon, sone, or calibrated dB SPL measurement.
+
+### Browser compatibility
+
+Audio analysis requires a browser with the Web Audio API.
+
+Video export requires `MediaRecorder` and a supported video MIME type. The tool checks browser capabilities at runtime instead of assuming Safari. It tries MP4 first, then WebM VP9/VP8. If no supported format is available, it displays a warning instead of silently failing.
+
+### English example
 
 ![Cymbal Decay Visualizer single-recording decay chart](screenshots/istanbul-21-xist-decay.png)
 
-## Project documentation
+### Example video
 
-The private project progress notes are intentionally not included in this public repository.
-They are maintained separately for the author's development workflow.
+[Download or play the Istanbul 21 Xist decay demonstration video](screenshots/istanbul-21-xist-decay-demo.mp4)
 
-## 许可证
+---
 
-本项目采用源码可见、个人与非商业使用许可：
+## 许可证 / License
 
-- 允许个人使用、学习、研究和非商业演示
-- 商业使用、销售、再打包、再发布、集成到收费软件或服务，需要事先获得作者书面许可
-- 重新发布时必须保留版权和许可证说明
+本项目采用源码可见、个人与非商业使用许可 / This project is source-available under a personal and non-commercial license:
 
-详见 [`LICENSE`](LICENSE)。
+- 允许个人使用、学习、研究和非商业演示 / Personal, educational, research, and non-commercial demonstration use is permitted.
+- 商业使用、销售、再打包、再发布、集成到收费软件或服务，需要事先获得作者书面许可 / Commercial use, resale, redistribution, sublicensing, or incorporation into a paid product or service requires prior written permission.
+- 重新发布时必须保留版权和许可证说明 / Copyright and license notices must be retained in permitted redistribution.
+
+详见 [`LICENSE`](LICENSE)。 / See [`LICENSE`](LICENSE).
 
 ## Copyright
 
