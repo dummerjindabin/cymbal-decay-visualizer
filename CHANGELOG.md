@@ -11,3 +11,6 @@
 - Warm parchment / Morandi outer theme
 - Graphite single-file chart theme
 - Reduced single-chart glow for clearer curves
+- Added English documentation and comparison screenshot
+- Documented cross-browser video capability detection
+- Improved PNG download reliability across browsers

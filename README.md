@@ -17,7 +17,7 @@
 - 物理衰减 / 第一阶段相对听觉贡献视图
 - 对比图 X/Y 轴缩放
 - 静态 PNG 导出，并嵌入分析数据
-- 动态视频导出：Safari 优先 MP4，其他浏览器回退 WebM
+- 动态视频导出：根据浏览器能力自动选择 MP4 或 WebM（不限定 Safari；若当前浏览器不支持任何可用格式，会显示提示）
 
 ## 使用方法
 
@@ -50,9 +50,18 @@ open -a Safari index.html
 
 浏览器第一次使用音频分析时，可能需要允许页面使用音频相关能力。音频只在本地浏览器中处理，不会自动上传到服务器。
 
-## 项目文档
+## English
 
-详细进度和设计记录见：[`docs/项目进度.md`](docs/项目进度.md)
+English documentation: [`README_EN.md`](README_EN.md)
+
+## 示例
+
+![Cymbal Decay Visualizer comparison view](screenshots/comparison-example.jpg)
+
+## Project documentation
+
+The private project progress notes are intentionally not included in this public repository.
+They are maintained separately for the author's development workflow.
 
 ## 许可证
 
