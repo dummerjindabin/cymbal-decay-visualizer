@@ -18,3 +18,10 @@
 - Merged the English documentation into the main README
 - Added an example MP4 video link
 - Added Hermes Agent development attribution
+
+## 2026-07-31
+
+- Made Single-analysis level the default comparison view
+- Kept Relative decay as a separate selectable comparison view
+- Added clear grey Off / highlighted On states to comparison mode controls
+- Added clickable comparison legend items to hide or restore individual file curves

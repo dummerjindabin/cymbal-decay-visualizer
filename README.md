@@ -12,10 +12,14 @@
 - 左右翻页查看已分析文件
 - 当前文件单独删除，或一键清空全部文件
 - 多文件对比模式
+- 对比模式默认使用“单张电平”视图：直接沿用单张分析的绝对 dB FS 曲线，并按所选频段峰值时间对齐
+- 可切换“相对衰减”视图，单独比较每个文件的衰减形状
 - 起音统一检测与对齐
 - 对齐后仅保留 `-0.2s` 的起音前导
 - 物理衰减 / 第一阶段相对听觉贡献视图
 - 对比图 X/Y 轴缩放
+- 对比图底部文件图例可点击，临时隐藏或恢复指定文件曲线
+- 对比工具栏模式按钮使用灰暗 Off / 点亮 On 状态提示
 - 静态 PNG 导出，并嵌入分析数据
 - 动态视频导出：根据浏览器能力自动选择 MP4 或 WebM（不限定 Safari；若当前浏览器不支持任何可用格式，会显示提示）
 
@@ -42,7 +46,7 @@ open -a Safari index.html
 → 自适应多窗口 STFT
 → 10 个频段 RMS 聚合
 → dB 曲线
-→ 相对归一化
+→ 单张图相对归一化 / 对比图保留绝对曲线
 → 图表显示
 ```
 
@@ -70,10 +74,14 @@ Drop an audio file into the page to inspect its relative decay curves, or load m
 - Previous/next navigation through analyzed files
 - Delete the current analysis without deleting the others
 - Multi-file comparison mode
+- Comparison defaults to **Single-analysis level**: absolute dB FS curves are reused and selected-band peak times are aligned
+- Optional **Relative decay** view for comparing decay shape independently of level
 - Unified onset detection and alignment
 - Comparison view with only 0.2 seconds of pre-onset context
 - Physical decay and first-stage relative auditory-contribution views
 - X/Y comparison zoom
+- Clickable comparison legend items to hide or restore individual file curves
+- Clear Off / highlighted On states for comparison modes
 - PNG export with embedded analysis data
 - Video export selected by browser capability: MP4 when supported, otherwise WebM
 
@@ -96,11 +104,13 @@ Audio decode → mono → peak normalization to -12 dB FS
 → adaptive multi-window STFT
 → ten-band RMS aggregation
 → dB curves
-→ relative normalization
+→ relative normalization for single-file view / absolute curves retained for level comparison
 → visualization
 ```
 
 The auditory-contribution view is a first-stage approximation for relative comparison within the same recording workflow. It is not an ISO 532-1, phon, sone, or calibrated dB SPL measurement.
+
+In comparison mode, **Single-analysis level** is enabled by default. It reuses the absolute dB FS curves already calculated for the single-file chart and aligns the selected band's peak time to 0 seconds. **Relative decay** remains available as a separate selectable view for comparing decay shape. Click a file swatch or filename in the comparison legend to hide or restore that file's curve.
 
 ### Browser compatibility
 

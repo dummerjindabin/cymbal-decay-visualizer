@@ -95,6 +95,11 @@
   button.primary { background:var(--accent-soft); border-color:rgba(217,164,65,.6); color:#f1ca78; }
   button.primary:hover { background:rgba(217,164,65,.23); border-color:var(--accent-bright); color:#ffe2a0; }
   button.mode-active { background:rgba(217,164,65,.20); border-color:var(--accent-bright); color:#ffe2a0; }
+  .compare-mode-btn { display:inline-flex; align-items:center; gap:6px; }
+  .compare-mode-state { display:inline-block; min-width:25px; font-size:10px; font-weight:750; letter-spacing:.04em; opacity:.75; }
+  .compare-mode-btn:not(.mode-active) { color:#899198; background:#eef1f2; border-color:#d7dde0; }
+  .compare-mode-btn:not(.mode-active) .compare-mode-state { color:#90989e; }
+  .compare-mode-btn.mode-active .compare-mode-state { color:#f0c875; opacity:1; }
   button:disabled { opacity:.35; cursor:not-allowed; }
 
   #legend { display:none; flex-wrap:wrap; gap:9px 22px; justify-content:flex-start; padding:11px 2px 3px; border-top:1px solid var(--border-soft); }
@@ -356,7 +361,9 @@
       <select id="cmp-band" class="compare-select"></select>
       <span id="cmp-count" class="compare-count"></span>
       <label class="compare-align"><input type="checkbox" id="cmp-align" checked>对齐起音</label>
-      <button id="btn-cmp-mode" class="compare-btn">👂 听觉贡献</button>
+      <button id="btn-cmp-level" class="compare-btn compare-mode-btn mode-active" title="使用单张分析中的绝对电平曲线"><span>📏 单张电平</span><span class="compare-mode-state">On</span></button>
+      <button id="btn-cmp-relative" class="compare-btn compare-mode-btn" title="将每个文件当前频段的峰值归零，比较衰减形状"><span>📉 相对衰减</span><span class="compare-mode-state">Off</span></button>
+      <button id="btn-cmp-mode" class="compare-btn compare-mode-btn" title="切换第一阶段相对听觉贡献视图"><span>👂 听觉贡献</span><span class="compare-mode-state">Off</span></button>
       <div class="compare-view-controls" aria-label="对比图视图缩放">
         <span class="compare-view-label">X</span>
         <button id="btn-cmp-x-minus" class="compare-icon-btn" title="缩小 X 轴比例" aria-label="缩小 X 轴比例">−</button>
@@ -573,7 +580,7 @@ function renderFrame(ctx,curves,t,currentT,dur,muted,mode='physical'){
 }
 
 // ═══════════════ 状态 ═══════════════
-const app={fileName:null,audioBuffer:null,sampleRate:0,curves:null,absCurves:null,t:null,duration:0,mutedBands:new Set(),isRecording:false,hoverTarget:-1,hoverAlpha:new Float32Array(10).fill(1),hoverAnimId:null,allResults:[],fileIndex:0,slideAnimId:null,viewMode:'physical',cmpMode:'physical'};
+const app={fileName:null,audioBuffer:null,sampleRate:0,curves:null,absCurves:null,t:null,duration:0,mutedBands:new Set(),isRecording:false,hoverTarget:-1,hoverAlpha:new Float32Array(10).fill(1),hoverAnimId:null,allResults:[],fileIndex:0,slideAnimId:null,viewMode:'physical',cmpMode:'physical',cmpScaleMode:'absolute'};
 
 function startHoverAnim(){
   if(app.hoverAnimId) return;
@@ -674,6 +681,7 @@ function deleteCurrentFile(){
   const removedName=app.allResults[app.fileIndex]?.fileName||'当前文件';
   app.allResults.splice(app.fileIndex,1);
   app.compareData.splice(app.fileIndex,1);
+  app.cmpHiddenFiles=new Set([...app.cmpHiddenFiles].filter(i=>i!==app.fileIndex).map(i=>i>app.fileIndex?i-1:i));
   app.cmpHoverTarget=-1;
   if(!app.allResults.length){
     app.fileIndex=0;app.curves=null;app.absCurves=null;app.t=null;app.audioBuffer=null;
@@ -1031,6 +1039,7 @@ app.compareData=[]; // [{fn,curves,t,dur,bands,absRef}]
 app.compareBand=3; // default band index
 app.cmpHoverTarget=-1; app.cmpHoverAlpha=new Float32Array(8).fill(1); app.cmpHoverId=null;
 app.cmpLegendHitBoxes=[];
+app.cmpHiddenFiles=new Set();
 app.cmpView={xZoom:1,yZoom:1};
 
 function getCompareLayout(fileCount=app.compareData.length,displayWidth=cmpCanvas.clientWidth||CANVAS_W){
@@ -1081,13 +1090,29 @@ document.getElementById('cmp-align').addEventListener('change',drawCompare);
 const CMP_PRE_ONSET_S=.2;
 function getCompareView(aligned){
   const isAligned=document.getElementById('cmp-align').checked;
+  const source=aligned.length?aligned:app.compareData.map((d,di)=>({t:d.t,curve:getComparisonCurves(d)[app.compareBand],index:di}));
   // 对齐后只保留 0.2 秒前导，足够看清起音前基线，避免空白段挤占横轴。
   const fullMinT=isAligned?-CMP_PRE_ONSET_S:0;
-  const fullMaxT=isAligned?Math.max(...aligned.map(a=>a.t[a.t.length-1])):Math.max(...app.compareData.map(d=>d.dur));
+  const fullMaxT=isAligned?Math.max(...source.map(a=>a.t[a.t.length-1])):Math.max(...app.compareData.map(d=>d.dur));
   const fullXRange=Math.max(.001,fullMaxT-fullMinT);
   const xMax=fullMinT+fullXRange/app.cmpView.xZoom;
-  const yMin=Y_BOT/app.cmpView.yZoom;
-  return {minT:fullMinT,maxT:xMax,xRange:xMax-fullMinT,yMin,yMax:Y_TOP};
+  let yMin=Y_BOT;
+  let yMax=Y_TOP;
+  if(app.cmpScaleMode==='absolute' && app.cmpMode==='physical' && source.length){
+    let minValue=Infinity,maxValue=-Infinity;
+    for(const a of source) for(const value of a.curve){
+      if(Number.isFinite(value)){minValue=Math.min(minValue,value);maxValue=Math.max(maxValue,value);}
+    }
+    if(Number.isFinite(minValue)&&Number.isFinite(maxValue)){
+      const span=Math.max(12,maxValue-minValue);
+      const pad=Math.max(3,span*.08);
+      yMin=Math.min(Y_BOT,minValue-pad);
+      yMax=Math.max(0,maxValue+pad);
+    }
+  }
+  const yZoom=app.cmpView.yZoom;
+  if(!(app.cmpScaleMode==='absolute' && app.cmpMode==='physical')) yMin=Y_BOT/yZoom;
+  return {minT:fullMinT,maxT:xMax,xRange:xMax-fullMinT,yMin,yMax};
 }
 
 function getCompareLegendHit(mx,my){
@@ -1129,6 +1154,30 @@ function getComparisonOnset(data,bandIndex){
   return Number.isFinite(data.onsetT) ? data.onsetT : getLegacyBandOnset(data.curves[bandIndex],data.t);
 }
 
+function getComparisonPeakTime(curve,t){
+  let peak=-Infinity,peakIndex=0;
+  for(let i=0;i<curve.length;i++) if(curve[i]>peak){peak=curve[i];peakIndex=i;}
+  return t[peakIndex]||0;
+}
+
+function getComparisonCurves(data){
+  return app.cmpMode==='perceptual'?getPerceptualCurves(data.curves):data.curves;
+}
+
+function updateCompareModeButtons(){
+  const levelBtn=document.getElementById('btn-cmp-level');
+  const relativeBtn=document.getElementById('btn-cmp-relative');
+  const auditoryBtn=document.getElementById('btn-cmp-mode');
+  const levelOn=app.cmpScaleMode==='absolute' && app.cmpMode==='physical';
+  const relativeOn=app.cmpScaleMode==='relative' && app.cmpMode==='physical';
+  const auditoryOn=app.cmpMode==='perceptual';
+  [[levelBtn,levelOn],[relativeBtn,relativeOn],[auditoryBtn,auditoryOn]].forEach(([btn,on])=>{
+    btn.classList.toggle('mode-active',on);
+    btn.querySelector('.compare-mode-state').textContent=on?'On':'Off';
+  });
+  document.querySelector('.compare-align').lastChild.textContent=levelOn?'对齐频段峰值':'对齐起音';
+}
+
 function drawCompare(){
   const {W,H,plotH:PH}=getCompareLayout(app.compareData.length,(cmpCanvas.width||CANVAS_W)/2);
   const PW=W-CMP_M.left-CMP_M.right;
@@ -1142,15 +1191,17 @@ function drawCompare(){
   // 网格（视图缩放后与曲线共享同一坐标范围）
   const bi=app.compareBand;
   const doAlign=document.getElementById('cmp-align').checked;
-  const aligned=app.compareData.map(d=>{
-    const sourceCurves=app.cmpMode==='perceptual'?getPerceptualCurves(d.curves):d.curves;
+  const useAbsoluteLevel=app.cmpScaleMode==='absolute' && app.cmpMode==='physical';
+  const aligned=app.compareData.map((d,di)=>{
+    const sourceCurves=getComparisonCurves(d);
     const c=sourceCurves[bi],t=d.t;
-    const onsetT=getComparisonOnset(d,bi);
-    const st=t.map(ti=>ti-onsetT);
+    const alignmentT=useAbsoluteLevel?getComparisonPeakTime(c,t):getComparisonOnset(d,bi);
+    const st=t.map(ti=>ti-alignmentT);
     let peak=-Infinity;for(let i=0;i<c.length;i++)if(c[i]>peak)peak=c[i];
-    return {curve:c,t:doAlign?st:t,peak,fn:d.fn};
+    return {curve:c,t:doAlign?st:t,peak,fn:d.fn,index:di,hidden:app.cmpHiddenFiles.has(di)};
   });
-  const view=getCompareView(aligned);
+  const visibleAligned=aligned.filter(d=>!d.hidden);
+  const view=getCompareView(visibleAligned);
   const mapX=t=>plotX+((t-view.minT)/view.xRange)*PW;
   const mapY=db=>plotY+PH-((Math.min(view.yMax,Math.max(view.yMin,db))-view.yMin)/(view.yMax-view.yMin))*PH;
   const yStep=view.yMin<=-45?12:view.yMin<=-28?6:view.yMin<=-18?3:2;
@@ -1164,7 +1215,7 @@ function drawCompare(){
   // 标签
   cmpCtx.fillStyle=AXIS_TEXT;cmpCtx.font='650 14px -apple-system,"PingFang SC",sans-serif';cmpCtx.textAlign='center';
   cmpCtx.fillText('时间 (秒)',plotX+PW/2,plotBottom+42);
-  cmpCtx.save();cmpCtx.translate(plotX-54,plotY+PH/2);cmpCtx.rotate(-Math.PI/2);cmpCtx.fillText(app.cmpMode==='perceptual'?'相对听觉贡献 (dB)':'相对衰减 (dB)',0,0);cmpCtx.restore();
+  cmpCtx.save();cmpCtx.translate(plotX-54,plotY+PH/2);cmpCtx.rotate(-Math.PI/2);cmpCtx.fillText(useAbsoluteLevel?'绝对电平 (dB FS)':app.cmpMode==='perceptual'?'相对听觉贡献 (dB)':'相对衰减 (dB)',0,0);cmpCtx.restore();
   cmpCtx.fillStyle=AXIS_TEXT;cmpCtx.textAlign='right';cmpCtx.font='650 14px -apple-system,"PingFang SC",sans-serif';
   for(let db=Math.ceil(view.yMin/yStep)*yStep;db<=view.yMax;db+=yStep){const y=mapY(db);cmpCtx.fillText(db+' dB',plotX-12,y+4);}
 
@@ -1179,13 +1230,14 @@ function drawCompare(){
   const cmpStyles=[[],[6,3],[3,3],[8,3,3,3]];
   for(let di=0;di<aligned.length;di++){
     const d=aligned[di],color=cmpColors[di%cmpColors.length],c=d.curve,t=d.t,peak=d.peak;
+    if(d.hidden) continue;
     cmpCtx.strokeStyle=color;cmpCtx.globalAlpha=0.92*(app.cmpHoverAlpha[di]||1);cmpCtx.lineWidth=2.5;
     const dashPat=cmpStyles[di%cmpStyles.length];
     if(dashPat.length>1) cmpCtx.setLineDash(dashPat);
     cmpCtx.lineCap='round';cmpCtx.beginPath();
     let started=false;
     for(let i=0;i<c.length;i++){
-      const yv=c[i]-peak;
+      const yv=useAbsoluteLevel?c[i]:c[i]-peak;
       // 低于视图下界时可以跳过该点，但不能停止整条曲线：
       // 很多录音的静音前导段先在 -60 dB 以下，随后才出现真正的打击与完整衰减。
       if(t[i]<view.minT) continue;
@@ -1206,9 +1258,9 @@ function drawCompare(){
     const row=Math.floor(di/CMP_ITEMS_PER_ROW),col=di%CMP_ITEMS_PER_ROW;
     const cx=plotX+colW*(col+0.5),cy=legendY+row*CMP_LEGEND_ROW_H;
     // 色块
-    const legendAlpha=app.cmpHoverTarget>=0&&di!==app.cmpHoverTarget?.12:1;
+    const legendAlpha=app.cmpHiddenFiles.has(di)?.22:app.cmpHoverTarget>=0&&di!==app.cmpHoverTarget?.12:1;
     cmpCtx.globalAlpha=legendAlpha;
-    cmpCtx.fillStyle=cmpColors[di%cmpColors.length];
+    cmpCtx.fillStyle=app.cmpHiddenFiles.has(di)?'#aeb6ba':cmpColors[di%cmpColors.length];
     cmpCtx.fillRect(cx-CMP_LEGEND_SWATCH_W/2,cy,CMP_LEGEND_SWATCH_W,10);
     cmpCtx.strokeStyle='rgba(255,255,255,.26)';cmpCtx.lineWidth=1;cmpCtx.strokeRect(cx-CMP_LEGEND_SWATCH_W/2+.5,cy+.5,CMP_LEGEND_SWATCH_W-1,9);
     // 文件名（截断到适合列宽）
@@ -1217,6 +1269,7 @@ function drawCompare(){
     cmpCtx.fillStyle=TEXT_COLOR;cmpCtx.textAlign='center';
     let display=fn;cmpCtx.font='650 '+CMP_LEGEND_FONT+'px -apple-system,"PingFang SC",sans-serif';
     while(cmpCtx.measureText(display).width>maxW&&display.length>4) display=display.slice(0,-4)+'…';
+    cmpCtx.fillStyle=app.cmpHiddenFiles.has(di)?'#98a1a6':TEXT_COLOR;
     cmpCtx.fillText(display,cx,cy+46);
     app.cmpLegendHitBoxes.push({index:di,x:cx-colW/2,y:cy-12,w:colW,h:68});
   }
@@ -1225,7 +1278,8 @@ function drawCompare(){
   // 标题
   const band=BANDS[app.compareBand];
   cmpCtx.fillStyle='#f1f1f6';cmpCtx.font='650 22px -apple-system,"PingFang SC",sans-serif';cmpCtx.textAlign='center';
-  cmpCtx.fillText(`${app.cmpMode==='perceptual'?'听觉贡献对比':'频段对比'}：${band.label}  ·  ${n} 个文件`,W/2,34);
+  const modeLabel=useAbsoluteLevel?'单张电平对比':app.cmpMode==='perceptual'?'听觉贡献对比':'频段对比';
+  cmpCtx.fillText(`${modeLabel}：${band.label}  ·  ${n} 个文件`,W/2,34);
 }
 
 function addCompareFiles(files){
@@ -1256,11 +1310,22 @@ document.getElementById('btn-compare-toggle').addEventListener('click',()=>{
 
 document.getElementById('btn-cmp-pick').addEventListener('click',()=>document.getElementById('cmp-files').click());
 document.getElementById('cmp-files').addEventListener('change',function(){if(this.files.length) addCompareFiles(this.files);this.value='';});
+document.getElementById('btn-cmp-relative').addEventListener('click',()=>{
+  app.cmpMode='physical';
+  app.cmpScaleMode='relative';
+  updateCompareModeButtons();
+  drawCompare();
+});
 document.getElementById('btn-cmp-mode').addEventListener('click',()=>{
-  app.cmpMode=app.cmpMode==='physical'?'perceptual':'physical';
-  const btn=document.getElementById('btn-cmp-mode');
-  btn.textContent=app.cmpMode==='perceptual'?'📉 物理衰减':'👂 听觉贡献';
-  btn.classList.toggle('mode-active',app.cmpMode==='perceptual');
+  app.cmpMode=app.cmpMode==='perceptual'?'physical':'perceptual';
+  if(app.cmpMode==='physical' && app.cmpScaleMode!=='relative' && app.cmpScaleMode!=='absolute') app.cmpScaleMode='absolute';
+  updateCompareModeButtons();
+  drawCompare();
+});
+document.getElementById('btn-cmp-level').addEventListener('click',()=>{
+  app.cmpMode='physical';
+  app.cmpScaleMode='absolute';
+  updateCompareModeButtons();
   drawCompare();
 });
 document.getElementById('btn-cmp-x-minus').addEventListener('click',()=>adjustCompareZoom('x',-1));
@@ -1273,7 +1338,7 @@ const cmpPanel=document.getElementById('compare-panel');
 cmpPanel.addEventListener('dragover',e=>{e.preventDefault();});
 cmpPanel.addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer.files.length) addCompareFiles(e.dataTransfer.files);});
 
-document.getElementById('btn-cmp-clear').addEventListener('click',()=>{app.compareData=[];app.cmpHoverTarget=-1;document.getElementById('cmp-count').textContent='';resizeCompareCanvas();});
+document.getElementById('btn-cmp-clear').addEventListener('click',()=>{app.compareData=[];app.cmpHiddenFiles.clear();app.cmpHoverTarget=-1;document.getElementById('cmp-count').textContent='';resizeCompareCanvas();});
 
 document.getElementById('btn-cmp-png').addEventListener('click',()=>{
   if(!app.compareData.length) return;
@@ -1294,6 +1359,7 @@ document.getElementById('btn-cmp-png').addEventListener('click',()=>{
 
 initCmpBandSel();
 updateCompareZoomControls();
+updateCompareModeButtons();
 resizeCompareCanvas();
 
 // 对比图悬停（简化定位）
@@ -1312,20 +1378,22 @@ cmpCanvas.addEventListener('mousemove',e=>{
   const plotBottom=CMP_M.top+cmpPH;
   if(mx<CMP_M.left||mx>CMP_M.left+PW||my<CMP_M.top||my>plotBottom){if(app.cmpHoverTarget!==-1){app.cmpHoverTarget=-1;cmpCanvas.style.cursor='default';startCmpHoverAnim();}return;}
   const bi=app.compareBand,doAlign=document.getElementById('cmp-align').checked;
+  const useAbsoluteLevel=app.cmpScaleMode==='absolute' && app.cmpMode==='physical';
   // 计算统一 x 轴范围
   const aligned2=app.compareData.map(d=>{
-    const sourceCurves=app.cmpMode==='perceptual'?getPerceptualCurves(d.curves):d.curves;
+    const sourceCurves=getComparisonCurves(d);
     const c=sourceCurves[bi],t=d.t;
-    const onsetT=getComparisonOnset(d,bi);
-    return {t:doAlign?t.map(ti=>ti-onsetT):t,c,peak:Math.max(...c)};
+    const alignmentT=useAbsoluteLevel?getComparisonPeakTime(c,t):getComparisonOnset(d,bi);
+    return {t:doAlign?t.map(ti=>ti-alignmentT):t,c,peak:Math.max(...c)};
   });
   const view2=getCompareView(aligned2);
   const tVal=view2.minT+((mx-CMP_M.left)/PW)*view2.xRange;
   let best=-1,bestDist=28;
   for(let di=0;di<aligned2.length;di++){
     const a=aligned2[di];
+    if(app.cmpHiddenFiles.has(di)) continue;
     let fi=0;while(fi<a.t.length-1&&a.t[fi+1]<tVal)fi++;
-    const yv=a.c[Math.min(fi,a.c.length-1)]-a.peak;
+    const yv=useAbsoluteLevel?a.c[Math.min(fi,a.c.length-1)]-0:a.c[Math.min(fi,a.c.length-1)]-a.peak;
     if(yv<view2.yMin||a.t[Math.min(fi,a.t.length-1)]>view2.maxT) continue;
     const py=CMP_M.top+cmpPH-((Math.min(view2.yMax,Math.max(view2.yMin,yv))-view2.yMin)/(view2.yMax-view2.yMin))*cmpPH;
     if(Math.abs(my-py)<bestDist){bestDist=Math.abs(my-py);best=di;}
@@ -1333,6 +1401,18 @@ cmpCanvas.addEventListener('mousemove',e=>{
   if(best!==app.cmpHoverTarget){app.cmpHoverTarget=best;cmpCanvas.style.cursor=best>=0?'pointer':'default';startCmpHoverAnim();}
 });
 cmpCanvas.addEventListener('mouseleave',()=>{if(app.cmpHoverTarget!==-1){app.cmpHoverTarget=-1;cmpCanvas.style.cursor='default';startCmpHoverAnim();}});
+cmpCanvas.addEventListener('click',e=>{
+  if(!app.compareData.length) return;
+  const r=cmpCanvas.getBoundingClientRect();
+  const sx=cmpCanvas.width/r.width,sy=cmpCanvas.height/r.height;
+  const mx=(e.clientX-r.left)*sx,my=(e.clientY-r.top)*sy;
+  const legendTarget=getCompareLegendHit(mx,my);
+  if(legendTarget<0) return;
+  if(app.cmpHiddenFiles.has(legendTarget)) app.cmpHiddenFiles.delete(legendTarget);
+  else app.cmpHiddenFiles.add(legendTarget);
+  app.cmpHoverTarget=-1;
+  drawCompare();
+});
 
 // 初始占位
 drawInitialPlaceholder('拖放镲片录音到此处，或点击「选择文件」');
