@@ -61,7 +61,7 @@ Video export requires `MediaRecorder` and a supported video MIME type. The tool 
 
 ## Example
 
-![Cymbal Decay Visualizer comparison view](screenshots/comparison-example.jpg)
+![Cymbal Decay Visualizer single-recording decay chart](screenshots/istanbul-21-xist-decay.png)
 
 ## License
 
