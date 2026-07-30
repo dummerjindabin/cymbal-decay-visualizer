@@ -29,7 +29,9 @@ open -a Safari index.html
 
 也可以直接双击 `index.html`。
 
-> Hermes 预览窗格不支持 `AudioContext`，请使用 Safari、Chrome 或 Edge 打开。
+## 开发说明
+
+本项目由 **jindabin** 设计，代码由 **Hermes Agent** 完成。
 
 ## 分析说明
 
@@ -82,6 +84,10 @@ Open `index.html` in a modern browser. You can also double-click the file.
 Recommended browsers: Safari, Chrome, Edge, or Firefox.
 
 Audio analysis requires the Web Audio API. Audio is processed locally in the browser and is not automatically uploaded.
+
+### Development note
+
+Designed by **jindabin**. Code completed by **Hermes Agent**.
 
 ### Analysis method
 
