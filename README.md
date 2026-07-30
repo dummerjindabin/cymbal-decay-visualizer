@@ -130,4 +130,4 @@ Video export requires `MediaRecorder` and a supported video MIME type. The tool 
 
 ## Copyright
 
-Copyright © 2026 Jinjue. All rights reserved.
+Copyright © 2026 jindabin. All rights reserved.
