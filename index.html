@@ -854,7 +854,7 @@ function embedJSONinPNG(pngBuf,jsonStr){
   const cd=new Uint8Array(kw.length+1+txt.length);cd.set(kw,0);cd.set(txt,kw.length+1);
   const tb=new TextEncoder().encode('tEXt'),cb=new Uint8Array(4+cd.length);
   cb.set(tb,0);cb.set(cd,4);
-  const out=new Uint8Array(iend+12+cd.length);
+  const out=new Uint8Array(d.length+12+cd.length);
   out.set(d.subarray(0,iend),0);
   new DataView(out.buffer).setUint32(iend,cd.length);
   out.set(tb,iend+4);out.set(cd,iend+8);
@@ -880,22 +880,42 @@ function extractJSONfromPNG(buf){
 }
 
 // ═══════════════ PNG 保存（含嵌入 JSON） ═══════════════
+function downloadBlob(blob,filename){
+  const u=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=u;a.download=filename;a.style.display='none';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{a.remove();URL.revokeObjectURL(u);},1500);
+}
+
+function base64ToArrayBuffer(base64){
+  const data=atob(base64),raw=new Uint8Array(data.length);
+  for(let i=0;i<data.length;i++) raw[i]=data.charCodeAt(i);
+  return raw.buffer;
+}
+
 function savePNG(){
-  if(!app.curves) return;
+  if(!app.curves){toast('⚠️ 请先分析音频');return;}
   drawStatic();
-  canvas.toBlob(b=>{
-    b.arrayBuffer().then(raw=>{
+  const finish=raw=>{
+    try{
       const json={v:1,fn:app.fileName,sr:app.sampleRate,dur:app.duration,
         bands:BANDS.map((b,i)=>({lo:b.lo,hi:b.hi,label:b.label,color:b.color})),
         curves:app.absCurves.map(c=>Array.from(c)),t:Array.from(app.t),
         absRef:app.curves._absRef,onsetT:app.allResults[app.fileIndex]?.onsetT};
       const enriched=embedJSONinPNG(raw,JSON.stringify(json));
-      const u=URL.createObjectURL(new Blob([enriched],{type:'image/png'}));
-      const a=document.createElement('a');a.href=u;
-      a.download=(app.fileName||'cymbal').replace(/\.[^.]+$/,'')+'_decay.png';
-      a.click();URL.revokeObjectURL(u);toast('✅ 静态图已保存（含分析数据）');
-    });
-  },'image/png');
+      const filename=(app.fileName||'cymbal').replace(/\.[^.]+$/,'')+'_decay.png';
+      downloadBlob(new Blob([enriched],{type:'image/png'}),filename);
+      toast('✅ 静态图已保存（含分析数据）');
+    }catch(e){console.error(e);toast('⚠️ PNG 导出失败：'+(e.message||'未知错误'));}
+  };
+  if(canvas.toBlob){
+    canvas.toBlob(blob=>{
+      if(blob) blob.arrayBuffer().then(finish).catch(e=>{console.error(e);toast('⚠️ PNG 导出失败');});
+      else finish(base64ToArrayBuffer(canvas.toDataURL('image/png').split(',')[1]));
+    },'image/png');
+  }else{
+    finish(base64ToArrayBuffer(canvas.toDataURL('image/png').split(',')[1]));
+  }
 }
 
 // ═══════════════ 视频录制 ═══════════════
@@ -915,7 +935,7 @@ async function recordVideo(){
   else{toast('⚠️ 浏览器不支持录制');actx.close();app.isRecording=false;btn.textContent='🎬 录制动态视频';btn.disabled=false;return;}
   const rec=new MediaRecorder(new MediaStream(tracks),{mimeType:mt,videoBitsPerSecond:6e6});
   const chunks=[];rec.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
-  rec.onstop=()=>{const b=new Blob(chunks,{type:mt}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=(app.fileName||'cymbal').replace(/\.[^.]+$/,'')+'_decay.'+ext;a.click();URL.revokeObjectURL(u);actx.close();app.isRecording=false;btn.textContent='🎬 录制动态视频';btn.disabled=false;toast('✅ 视频已保存 ('+ext.toUpperCase()+')');};
+  rec.onstop=()=>{const b=new Blob(chunks,{type:mt});downloadBlob(b,(app.fileName||'cymbal').replace(/\.[^.]+$/,'')+'_decay.'+ext);actx.close();app.isRecording=false;btn.textContent='🎬 录制动态视频';btn.disabled=false;toast('✅ 视频已保存 ('+ext.toUpperCase()+')');};
   rec.onerror=()=>{actx.close();app.isRecording=false;btn.textContent='🎬 录制动态视频';btn.disabled=false;toast('⚠️ 录制失败');};
   const st=actx.currentTime,dur=app.duration;
   function drawRF(){if(!app.isRecording)return;const el=actx.currentTime-st;if(el>=dur+0.05){rec.stop();src.stop();return;}renderFrame(rctx,app.curves,app.t,Math.min(el,dur),dur,app.mutedBands,app.viewMode);requestAnimationFrame(drawRF);}
