@@ -1,5 +1,6 @@
 .DS_Store
 ._*
+.hermes/
 *.wav
 *.mp3
 *.aiff
